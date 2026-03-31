@@ -58,7 +58,7 @@ export function EventsPanel() {
             </span>
           )}
         </Text>
-        <Text variant="body" as="p" color="subtle">
+        <Text variant="body" as="p" tone="subtle">
           Estimated delivery {MOCK_ORDER.estimatedDelivery}
         </Text>
       </div>
