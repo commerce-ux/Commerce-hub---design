@@ -6,7 +6,7 @@ import { OrderHeader } from "./OrderHeader";
 import { OrderStepper } from "./OrderStepper";
 import { OrderInfoPanels } from "./OrderInfoPanels";
 import { OrderDetailsTabs } from "./OrderDetailsTabs";
-import { allLineItemsDelivered } from "./LineItemsPanel";
+import { allLineItemsDelivered, hasDelayedItems } from "./LineItemsPanel";
 import { Breadcrumbs, BreadcrumbItem } from "@cimpress-ui/react";
 
 const BASE_ORDER_STEPS = [
@@ -23,7 +23,7 @@ const BASE_ORDER_STEPS = [
   {
     label: "Shipment started",
     description: "for 2 items",
-    status: "error" as const,
+    status: (hasDelayedItems ? "warning" : "error") as "warning" | "error",
   },
   {
     label: "Order delivered",
@@ -35,7 +35,7 @@ const BASE_ORDER_STEPS = [
 const CANCELLATION_STEP = {
   label: "Order cancellation in progress",
   description: "",
-  status: "in-progress" as const,
+  status: "warning" as const,
 };
 
 const SHIPPING_INFO = {

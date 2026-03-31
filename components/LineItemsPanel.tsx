@@ -271,6 +271,7 @@ function LineItemCard({
 
 // Exported so OrderHeader can check delivery status
 export const allLineItemsDelivered = LINE_ITEMS.every((i) => i.badgeLabel === "Delivered");
+export const hasDelayedItems = LINE_ITEMS.some((i) => i.badgeLabel === "Delayed");
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
