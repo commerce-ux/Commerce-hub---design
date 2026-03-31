@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { CommerceHubHeader } from "./CommerceHubHeader";
 import { OrderHeader } from "./OrderHeader";
 import { OrderStepper } from "./OrderStepper";
@@ -8,7 +9,7 @@ import { OrderDetailsTabs } from "./OrderDetailsTabs";
 import { allLineItemsDelivered } from "./LineItemsPanel";
 import { Breadcrumbs, BreadcrumbItem } from "@cimpress-ui/react";
 
-const ORDER_STEPS = [
+const BASE_ORDER_STEPS = [
   {
     label: "Order created",
     description: "on Mon 21 Oct 2025 (GMT+0530 India Standard Time)",
@@ -30,6 +31,12 @@ const ORDER_STEPS = [
     status: "incomplete" as const,
   },
 ];
+
+const CANCELLATION_STEP = {
+  label: "Order cancellation in progress",
+  description: "",
+  status: "in-progress" as const,
+};
 
 const SHIPPING_INFO = {
   name: "Tanishq Bhatia",
@@ -68,6 +75,12 @@ interface OrderDetailsPageProps {
 }
 
 export function OrderDetailsPage({ orderId }: OrderDetailsPageProps) {
+  const [isCancelled, setIsCancelled] = useState(false);
+
+  const steps = isCancelled
+    ? [...BASE_ORDER_STEPS, CANCELLATION_STEP]
+    : BASE_ORDER_STEPS;
+
   return (
     <div className="flex flex-col min-h-screen">
       <CommerceHubHeader />
@@ -84,9 +97,11 @@ export function OrderDetailsPage({ orderId }: OrderDetailsPageProps) {
             customerEmail="tanishq.bhatia@cimpress.com"
             customerPhone="+9 12123012033"
             allItemsDelivered={allLineItemsDelivered}
+            isCancelled={isCancelled}
+            onCancelled={() => setIsCancelled(true)}
           />
 
-          <OrderStepper steps={ORDER_STEPS} />
+          <OrderStepper steps={steps} />
 
           <OrderInfoPanels
             shipping={SHIPPING_INFO}

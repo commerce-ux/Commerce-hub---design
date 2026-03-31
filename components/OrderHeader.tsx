@@ -12,6 +12,8 @@ interface OrderHeaderProps {
   customerEmail: string;
   customerPhone: string;
   allItemsDelivered?: boolean;
+  isCancelled: boolean;
+  onCancelled: () => void;
 }
 
 /** Simulates an async cancellation API call. Returns true on success. */
@@ -27,9 +29,10 @@ export function OrderHeader({
   customerEmail,
   customerPhone,
   allItemsDelivered = false,
+  isCancelled,
+  onCancelled,
 }: OrderHeaderProps) {
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const [isCancelled, setIsCancelled] = useState(false);
   const [toast, setToast] = useState<ToastVariant | null>(null);
   const [tooltipOpen, setTooltipOpen] = useState(false);
   const cancelSpanRef = useRef<HTMLSpanElement>(null);
@@ -40,7 +43,7 @@ export function OrderHeader({
     setShowCancelModal(false);
     const success = await simulateCancelApi();
     if (success) {
-      setIsCancelled(true);
+      onCancelled();
       setToast("success");
     } else {
       setToast("failure");
