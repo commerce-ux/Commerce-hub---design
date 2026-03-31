@@ -2,7 +2,6 @@
 
 import { Tabs, TabList, Tab, TabPanels, TabPanel } from "@cimpress-ui/react";
 import { EventsPanel } from "./EventsPanel";
-import { LineItemsPanel } from "./LineItemsPanel";
 
 interface OrderDetailsTabsProps {
   defaultTab?: string;
@@ -18,7 +17,9 @@ export function OrderDetailsTabs({ defaultTab = "events" }: OrderDetailsTabsProp
       </TabList>
       <TabPanels>
         <TabPanel id="line-items">
-          <LineItemsPanel />
+          <div className="py-6 text-[color:var(--cim-fg-subtle)]">
+            Line items content
+          </div>
         </TabPanel>
         <TabPanel id="shipment-info">
           <div className="py-6 text-[color:var(--cim-fg-subtle)]">
@@ -26,7 +27,7 @@ export function OrderDetailsTabs({ defaultTab = "events" }: OrderDetailsTabsProp
           </div>
         </TabPanel>
         <TabPanel id="events">
-          <div className="pt-4">
+          <div className="pt-6">
             <EventsPanel />
           </div>
         </TabPanel>

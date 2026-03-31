@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, CopyInline, Disclosure } from "@cimpress-ui/react";
+import { Badge, Disclosure } from "@cimpress-ui/react";
 import { ItemProgressTracker } from "./ItemProgressTracker";
 import { EventList } from "./EventList";
 import type { OrderEvent, EventCategory } from "@/lib/types";
@@ -69,7 +69,7 @@ export function LineItemCard({
             <div className="flex flex-1 items-start justify-between min-w-0">
               <div className="flex flex-col gap-3">
                 <span className="text-base text-[color:var(--cim-fg-base)]">
-                  Item ID: <CopyInline variant="body">{itemId}</CopyInline>
+                  Item ID: {itemId}
                 </span>
                 <div className="flex items-center gap-6">
                   <button

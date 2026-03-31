@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "@cimpress-ui/react/styles.css";
-import { ClipboardPolyfill } from "@/components/ClipboardPolyfill";
 
 export const metadata: Metadata = {
   title: "Commerce Hub",
@@ -24,7 +23,6 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full" style={{ backgroundColor: 'white' }}>
-        <ClipboardPolyfill />
         {children}
       </body>
     </html>

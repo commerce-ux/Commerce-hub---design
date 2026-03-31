@@ -5,7 +5,6 @@ import { OrderHeader } from "./OrderHeader";
 import { OrderStepper } from "./OrderStepper";
 import { OrderInfoPanels } from "./OrderInfoPanels";
 import { OrderDetailsTabs } from "./OrderDetailsTabs";
-import { allLineItemsDelivered } from "./LineItemsPanel";
 import { Breadcrumbs, BreadcrumbItem } from "@cimpress-ui/react";
 
 const ORDER_STEPS = [
@@ -83,7 +82,6 @@ export function OrderDetailsPage({ orderId }: OrderDetailsPageProps) {
             customerName="Tanishq Bhatia"
             customerEmail="tanishq.bhatia@cimpress.com"
             customerPhone="+9 12123012033"
-            allItemsDelivered={allLineItemsDelivered}
           />
 
           <OrderStepper steps={ORDER_STEPS} />

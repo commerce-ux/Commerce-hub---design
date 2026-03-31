@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { UNSTABLE_Toggle, Text } from "@cimpress-ui/react";
+import { UNSTABLE_Toggle } from "@cimpress-ui/react";
 import { IconSearch } from "@cimpress-ui/react/icons";
 import { LineItemCard } from "./LineItemCard";
 import { LINE_ITEMS, MOCK_ORDER } from "@/lib/mockData";
@@ -50,17 +50,17 @@ export function EventsPanel() {
     <div className="flex flex-col gap-4">
       {/* Summary */}
       <div className="flex flex-col gap-1">
-        <Text variant="title-6" as="p">
+        <p className="text-sm font-semibold text-[color:var(--cim-fg-base)]">
           {LINE_ITEMS.length}/{LINE_ITEMS.length} total items showing
           {warningItemCount > 0 && (
             <span className="ml-2 font-normal text-[color:var(--cim-fg-critical)]">
               · {warningItemCount} item{warningItemCount > 1 ? "s" : ""} need attention
             </span>
           )}
-        </Text>
-        <Text variant="body" as="p" color="subtle">
+        </p>
+        <p className="text-sm text-[color:var(--cim-fg-subtle)]">
           Estimated delivery {MOCK_ORDER.estimatedDelivery}
-        </Text>
+        </p>
       </div>
 
       {/* Toolbar */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Text } from "@cimpress-ui/react";
+import { Badge } from "@cimpress-ui/react";
 
 interface AddressInfo {
   name: string;
@@ -95,7 +95,9 @@ export function OrderInfoPanels({ shipping, billing, pricing }: OrderInfoPanelsP
         </div>
         <div className="flex items-center justify-between pt-4 border-t border-[var(--cim-border-base)]">
           <span className="text-sm font-semibold text-[color:var(--cim-fg-base)]">Total</span>
-          <Text as="span" variant="title-2">{pricing.total}</Text>
+          <span className="text-2xl font-bold text-[color:var(--cim-fg-base)]">
+            {pricing.total}
+          </span>
         </div>
       </div>
     </div>

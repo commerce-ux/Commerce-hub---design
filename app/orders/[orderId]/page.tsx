@@ -1,9 +1,5 @@
 import { OrderDetailsPage } from "@/components/OrderDetailsPage";
 
-export function generateStaticParams() {
-  return [{ orderId: "VP_8WZ3DJ32" }];
-}
-
 interface OrderPageProps {
   params: Promise<{ orderId: string }>;
 }
