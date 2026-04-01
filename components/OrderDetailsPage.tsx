@@ -109,7 +109,7 @@ export function OrderDetailsPage({ orderId }: OrderDetailsPageProps) {
             pricing={PRICING_INFO}
           />
 
-          <OrderDetailsTabs defaultTab="events" />
+          <OrderDetailsTabs defaultTab="events" isCancelled={isCancelled} />
         </div>
       </main>
     </div>

@@ -5,8 +5,25 @@ import { UNSTABLE_Toggle, Text } from "@cimpress-ui/react";
 import { IconSearch } from "@cimpress-ui/react/icons";
 import { LineItemCard } from "./LineItemCard";
 import { LINE_ITEMS, MOCK_ORDER } from "@/lib/mockData";
+import type { OrderEvent } from "@/lib/types";
 
-export function EventsPanel() {
+const CANCELLATION_REQUESTED_EVENT: OrderEvent = {
+  id: "cancellation-requested",
+  eventType: "line_item.cancellation_requested",
+  name: "Cancellation requested",
+  timestamp: new Date().toUTCString().replace("GMT", "GMT+0530 (India Standard Time)"),
+  isoTimestamp: new Date().toISOString(),
+  iconStatus: "error",
+  category: "key_event",
+  details: {
+    subType: "CancellationRequested",
+    description:
+      "A cancellation request has been submitted for this line item. The request is being processed by the fulfilment platform.",
+    source: "Commerce Hub – Customer Service Portal",
+  },
+};
+
+export function EventsPanel({ isCancelled = false }: { isCancelled?: boolean }) {
   const [search, setSearch] = useState("");
   const [expandAll, setExpandAll] = useState(false);
   const [warningsOnly, setWarningsOnly] = useState(false);
@@ -94,26 +111,34 @@ export function EventsPanel() {
             No items match your search.
           </div>
         ) : (
-          filteredItems.map((item) => (
-            <LineItemCard
-              key={item.id}
-              id={item.id}
-              name={item.name}
-              badgeLabel={item.badgeLabel}
-              badgeTone={item.badgeTone}
-              imageUrl={item.imageUrl}
-              itemId={item.lineItemId}
-              warningCount={item.events.filter((e) => e.category === "warning").length}
-              keyEventCount={item.events.filter((e) => e.category === "key_event").length}
-              summaryText={item.summaryText}
-              summaryTimestamp={item.summaryTimestamp}
-              progressSteps={[...item.progressSteps] as ("complete" | "error" | "pending")[]}
-              events={item.events}
-              warningsOnly={warningsOnly}
-              isExpanded={expandedIds.has(item.id)}
-              onToggle={() => toggleItem(item.id)}
-            />
-          ))
+          filteredItems.map((item) => {
+            const needsCancellation = isCancelled && item.status !== "cancel_succeeded";
+            const displayBadgeLabel = needsCancellation ? "Cancellation requested" : item.badgeLabel;
+            const displayBadgeTone = needsCancellation ? "warning" : item.badgeTone;
+            const displayEvents = needsCancellation
+              ? [CANCELLATION_REQUESTED_EVENT, ...item.events]
+              : item.events;
+            return (
+              <LineItemCard
+                key={item.id}
+                id={item.id}
+                name={item.name}
+                badgeLabel={displayBadgeLabel}
+                badgeTone={displayBadgeTone}
+                imageUrl={item.imageUrl}
+                itemId={item.lineItemId}
+                warningCount={displayEvents.filter((e) => e.category === "warning").length}
+                keyEventCount={displayEvents.filter((e) => e.category === "key_event").length}
+                summaryText={needsCancellation ? "Cancellation requested" : item.summaryText}
+                summaryTimestamp={needsCancellation ? CANCELLATION_REQUESTED_EVENT.timestamp : item.summaryTimestamp}
+                progressSteps={[...item.progressSteps] as ("complete" | "error" | "pending")[]}
+                events={displayEvents}
+                warningsOnly={warningsOnly}
+                isExpanded={expandedIds.has(item.id)}
+                onToggle={() => toggleItem(item.id)}
+              />
+            );
+          })
         )}
       </div>
     </div>

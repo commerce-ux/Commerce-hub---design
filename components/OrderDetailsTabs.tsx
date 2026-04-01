@@ -6,9 +6,10 @@ import { LineItemsPanel } from "./LineItemsPanel";
 
 interface OrderDetailsTabsProps {
   defaultTab?: string;
+  isCancelled?: boolean;
 }
 
-export function OrderDetailsTabs({ defaultTab = "events" }: OrderDetailsTabsProps) {
+export function OrderDetailsTabs({ defaultTab = "events", isCancelled = false }: OrderDetailsTabsProps) {
   return (
     <Tabs defaultSelectedKey={defaultTab} aria-label="Order details">
       <TabList>
@@ -18,7 +19,7 @@ export function OrderDetailsTabs({ defaultTab = "events" }: OrderDetailsTabsProp
       </TabList>
       <TabPanels>
         <TabPanel id="line-items">
-          <LineItemsPanel />
+          <LineItemsPanel isCancelled={isCancelled} />
         </TabPanel>
         <TabPanel id="shipment-info">
           <div className="py-6 text-[color:var(--cim-fg-subtle)]">
@@ -27,7 +28,7 @@ export function OrderDetailsTabs({ defaultTab = "events" }: OrderDetailsTabsProp
         </TabPanel>
         <TabPanel id="events">
           <div className="pt-4">
-            <EventsPanel />
+            <EventsPanel isCancelled={isCancelled} />
           </div>
         </TabPanel>
       </TabPanels>

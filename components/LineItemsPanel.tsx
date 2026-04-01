@@ -167,10 +167,12 @@ function LineItemCard({
   item,
   isSelected,
   onSelect,
+  isCancelled,
 }: {
   item: LineItem;
   isSelected: boolean;
   onSelect: (checked: boolean) => void;
+  isCancelled: boolean;
 }) {
   return (
     <div
@@ -186,7 +188,11 @@ function LineItemCard({
           <p className="font-semibold leading-6 text-base text-[color:var(--cim-fg-base)] w-full h-12 line-clamp-2 overflow-hidden">
             {item.name}
           </p>
-          <Badge size="large" tone={item.badgeTone}>{item.badgeLabel}</Badge>
+          {isCancelled && item.badgeLabel !== "Delivered" ? (
+            <Badge size="large" tone="warning">Cancellation requested</Badge>
+          ) : (
+            <Badge size="large" tone={item.badgeTone}>{item.badgeLabel}</Badge>
+          )}
         </div>
         <button className="text-[color:var(--cim-fg-subtle)] hover:text-[color:var(--cim-fg-base)] shrink-0 pt-0.5" type="button">
           <IconMenuMoreVertical />
@@ -275,7 +281,7 @@ export const hasDelayedItems = LINE_ITEMS.some((i) => i.badgeLabel === "Delayed"
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
-export function LineItemsPanel() {
+export function LineItemsPanel({ isCancelled = false }: { isCancelled?: boolean }) {
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -351,6 +357,7 @@ export function LineItemsPanel() {
             item={item}
             isSelected={selectedIds.has(item.id)}
             onSelect={(checked) => handleSelectItem(item.id, checked)}
+            isCancelled={isCancelled}
           />
         ))}
       </div>
