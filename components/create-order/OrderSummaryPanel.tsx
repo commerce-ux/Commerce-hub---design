@@ -189,9 +189,11 @@ export function OrderSummaryPanel({
       </div>
 
       {/* Place Order button */}
-      <Button variant="primary" onPress={onPlaceOrder} isDisabled={!hasItems} style={{ width: "100%" }}>
-        Place Order
-      </Button>
+      <div style={{ width: "100%" }}>
+        <Button variant="primary" onPress={onPlaceOrder} isDisabled={!hasItems}>
+          Place Order
+        </Button>
+      </div>
 
       {/* Divider */}
       <div style={{ height: "1px", background: "var(--cim-border-subtle, #eaebeb)" }} />
