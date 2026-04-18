@@ -110,16 +110,15 @@ export function CustomerManagementPage() {
   const [phone, setPhone] = useState("");
   const [customerId, setCustomerId] = useState("");
 
-  const [results, setResults] = useState<Customer[]>(CUSTOMER_DATABASE);
-  const [searched, setSearched] = useState(true);
+  const [results, setResults] = useState<Customer[]>([]);
+  const [searched, setSearched] = useState(false);
 
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   function handleSearch() {
-    const found = hasAnyInput(name, email, phone, customerId)
-      ? searchCustomers(name, email, phone, customerId)
-      : CUSTOMER_DATABASE;
+    if (!hasAnyInput(name, email, phone, customerId)) return;
+    const found = searchCustomers(name, email, phone, customerId);
     setResults(found);
     setSearched(true);
   }
