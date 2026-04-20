@@ -142,9 +142,9 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const unitPrice = resolvePricingTier(product.pricingTiers, quantity);
     const basePrice = parseFloat((unitPrice * quantity).toFixed(2));
     const selectedCharge = (product.extraCharges ?? []).find((c) => c.id === selectedChargeId);
-    const artworkCharge = artworkOption === "customise" ? 10 : 0;
+    const artworkCharge = 10;
     const extraChargesTotal = parseFloat(((selectedCharge?.unitPrice ?? 0) + artworkCharge).toFixed(2));
-    const chargesApplied = (selectedCharge ? 1 : 0) + (artworkOption === "customise" ? 1 : 0);
+    const chargesApplied = (selectedCharge ? 1 : 0) + 1;
     const subtotal = parseFloat((basePrice + extraChargesTotal).toFixed(2));
     const taxRate = product.taxRate ?? 8;
     const tax = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
@@ -419,128 +419,183 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
             );
           })()}
 
-          {/* Attributes section */}
-          {product.attributes.length > 0 && (
-            <div ref={attributesRef} style={sectionCard}>
-              <p style={sectionHeading}>Attributes</p>
-              {product.attributes.map((attr) => {
-                const currentVal = selectedAttributes.find((a) => a.attributeId === attr.id)?.selectedOptionId ?? "";
-                if (attr.type === "color") {
-                  return (
-                    <div key={attr.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{attr.label}</span>
-                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                        {attr.options.map((opt) => {
-                          const isSelected = currentVal === opt.id;
-                          return (
-                            <button
-                              key={opt.id}
-                              title={opt.label}
-                              aria-label={opt.label}
-                              aria-pressed={isSelected}
-                              onClick={() => handleAttributeChange(attr.id, opt.id)}
-                              style={{
-                                width: "30px",
-                                height: "30px",
-                                borderRadius: "6px",
-                                background: opt.hexColor ?? "#ccc",
-                                border: isSelected ? "2px solid var(--cim-fg-accent, #0091b8)" : "2px solid transparent",
-                                outline: isSelected ? "1px solid var(--cim-fg-accent, #0091b8)" : "none",
-                                outlineOffset: "2px",
-                                cursor: "pointer",
-                                flexShrink: 0,
-                                padding: 0,
-                              }}
-                            />
-                          );
-                        })}
+          {/* Attributes + Quantity section */}
+          {product.attributes.length > 0 ? (
+            <div ref={attributesRef} style={{ ...sectionCard, padding: 0, gap: 0, overflow: "hidden" }}>
+              <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <p style={sectionHeading}>Attributes</p>
+                {product.attributes.map((attr) => {
+                  const currentVal = selectedAttributes.find((a) => a.attributeId === attr.id)?.selectedOptionId ?? "";
+                  if (attr.type === "color") {
+                    return (
+                      <div key={attr.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{attr.label}</span>
+                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                          {attr.options.map((opt) => {
+                            const isSelected = currentVal === opt.id;
+                            return (
+                              <button
+                                key={opt.id}
+                                title={opt.label}
+                                aria-label={opt.label}
+                                aria-pressed={isSelected}
+                                onClick={() => handleAttributeChange(attr.id, opt.id)}
+                                style={{
+                                  width: "30px",
+                                  height: "30px",
+                                  borderRadius: "6px",
+                                  background: opt.hexColor ?? "#ccc",
+                                  border: isSelected ? "2px solid var(--cim-fg-accent, #0091b8)" : "2px solid transparent",
+                                  outline: isSelected ? "1px solid var(--cim-fg-accent, #0091b8)" : "none",
+                                  outlineOffset: "2px",
+                                  cursor: "pointer",
+                                  flexShrink: 0,
+                                  padding: 0,
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
                       </div>
+                    );
+                  }
+                  return (
+                    <div key={attr.id} style={{ minWidth: "160px", maxWidth: "320px" }}>
+                      <Select
+                        label={attr.label}
+                        selectedKey={currentVal}
+                        onSelectionChange={(val) => handleAttributeChange(attr.id, String(val))}
+                      >
+                        {attr.options.map((opt) => (
+                          <SelectItem key={opt.id} id={opt.id}>{opt.label}</SelectItem>
+                        ))}
+                      </Select>
                     </div>
                   );
-                }
-                return (
-                  <div key={attr.id} style={{ minWidth: "160px", maxWidth: "320px" }}>
+                })}
+              </div>
+              <div ref={quantityRef} style={{ borderTop: "1px solid var(--cim-border-subtle, #eaebeb)", padding: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{ width: "280px" }}>
                     <Select
-                      label={attr.label}
-                      selectedKey={currentVal}
-                      onSelectionChange={(val) => handleAttributeChange(attr.id, String(val))}
+                      label="Quantity"
+                      selectedKey={String(quantity)}
+                      onSelectionChange={(val) => handleQuantityChange(Number(val))}
                     >
-                      {attr.options.map((opt) => (
-                        <SelectItem key={opt.id} id={opt.id}>{opt.label}</SelectItem>
-                      ))}
+                      {quantityOptions.map((q) => {
+                        const tierPrice = resolvePricingTier(product.pricingTiers, q);
+                        const totalForQ = parseFloat((q * tierPrice).toFixed(2));
+                        return (
+                          <SelectItem key={String(q)} id={String(q)}>
+                            {q} ({totalForQ.toFixed(2)} USD) {tierPrice.toFixed(2)} / unit
+                          </SelectItem>
+                        );
+                      })}
                     </Select>
                   </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Quantity section */}
-          <div ref={quantityRef} style={{ ...sectionCard, padding: 0, gap: 0, overflow: "hidden" }}>
-            <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
-              <p style={sectionHeading}>Quantity</p>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <div style={{ width: "280px" }}>
-                  <Select
-                    label="Quantity"
-                    selectedKey={String(quantity)}
-                    onSelectionChange={(val) => handleQuantityChange(Number(val))}
-                  >
-                    {quantityOptions.map((q) => {
-                      const tierPrice = resolvePricingTier(product.pricingTiers, q);
-                      const totalForQ = parseFloat((q * tierPrice).toFixed(2));
-                      return (
-                        <SelectItem key={String(q)} id={String(q)}>
-                          {q} ({totalForQ.toFixed(2)} USD) {tierPrice.toFixed(2)} / unit
-                        </SelectItem>
-                      );
-                    })}
-                  </Select>
+                  <div style={{ marginTop: "22px", color: "var(--cim-fg-subtle, #5f6469)", display: "flex" }}>
+                    <IconInfoCircle />
+                  </div>
                 </div>
-                <div style={{ marginTop: "22px", color: "var(--cim-fg-subtle, #5f6469)", display: "flex" }}>
-                  <IconInfoCircle />
-                </div>
+                <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                  Quantity has to be between {product.minOrderQty} - {product.maxOrderQty}
+                </span>
+                {product.stockQuantity !== undefined && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ color: "var(--cim-fg-success, #007e3f)", display: "flex" }}>
+                      <IconCheckCircleFill />
+                    </span>
+                    <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
+                      In stock - {product.stockQuantity}
+                    </span>
+                  </div>
+                )}
               </div>
-              <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                Quantity has to be between {product.minOrderQty} - {product.maxOrderQty}
-              </span>
-              {product.stockQuantity !== undefined && (
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span style={{ color: "var(--cim-fg-success, #007e3f)", display: "flex" }}>
-                    <IconCheckCircleFill />
-                  </span>
+              {upsellInfo && (
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  padding: "10px 12px",
+                  background: "var(--cim-bg-subtle, #f8f9fa)",
+                  borderTop: "1px solid var(--cim-border-subtle, #eaebeb)",
+                }}>
+                  {upsellApplied ? (
+                    <Button variant="secondary" tone="critical" size="small" onPress={handleRemoveUpsell}>Remove upsell</Button>
+                  ) : (
+                    <Button variant="secondary" size="small" onPress={handleAddUpsell}>Add upsell</Button>
+                  )}
                   <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                    In stock - {product.stockQuantity}
+                    {upsellApplied
+                      ? `${upsellInfo.additionalUnits} more added for ${upsellInfo.additionalCost.toFixed(2)} USD`
+                      : `${upsellInfo.additionalUnits} more for USD ${upsellInfo.additionalCost.toFixed(2)}`}
                   </span>
                 </div>
               )}
             </div>
-            {upsellInfo && (
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                padding: "10px 12px",
-                background: "var(--cim-bg-subtle, #f8f9fa)",
-                borderTop: "1px solid var(--cim-border-subtle, #eaebeb)",
-              }}>
-                {upsellApplied ? (
-                  <Button variant="secondary" tone="critical" size="small" onPress={handleRemoveUpsell}>
-                    Remove upsell
-                  </Button>
-                ) : (
-                  <Button variant="secondary" size="small" onPress={handleAddUpsell}>
-                    Add upsell
-                  </Button>
-                )}
-                <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                  {upsellApplied
-                    ? `${upsellInfo.additionalUnits} more added for ${upsellInfo.additionalCost.toFixed(2)} USD`
-                    : `${upsellInfo.additionalUnits} more for USD ${upsellInfo.additionalCost.toFixed(2)}`}
+          ) : (
+            <div ref={quantityRef} style={{ ...sectionCard, padding: 0, gap: 0, overflow: "hidden" }}>
+              <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <p style={sectionHeading}>Quantity</p>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{ width: "280px" }}>
+                    <Select
+                      label="Quantity"
+                      selectedKey={String(quantity)}
+                      onSelectionChange={(val) => handleQuantityChange(Number(val))}
+                    >
+                      {quantityOptions.map((q) => {
+                        const tierPrice = resolvePricingTier(product.pricingTiers, q);
+                        const totalForQ = parseFloat((q * tierPrice).toFixed(2));
+                        return (
+                          <SelectItem key={String(q)} id={String(q)}>
+                            {q} ({totalForQ.toFixed(2)} USD) {tierPrice.toFixed(2)} / unit
+                          </SelectItem>
+                        );
+                      })}
+                    </Select>
+                  </div>
+                  <div style={{ marginTop: "22px", color: "var(--cim-fg-subtle, #5f6469)", display: "flex" }}>
+                    <IconInfoCircle />
+                  </div>
+                </div>
+                <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                  Quantity has to be between {product.minOrderQty} - {product.maxOrderQty}
                 </span>
+                {product.stockQuantity !== undefined && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ color: "var(--cim-fg-success, #007e3f)", display: "flex" }}>
+                      <IconCheckCircleFill />
+                    </span>
+                    <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
+                      In stock - {product.stockQuantity}
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+              {upsellInfo && (
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  padding: "10px 12px",
+                  background: "var(--cim-bg-subtle, #f8f9fa)",
+                  borderTop: "1px solid var(--cim-border-subtle, #eaebeb)",
+                }}>
+                  {upsellApplied ? (
+                    <Button variant="secondary" tone="critical" size="small" onPress={handleRemoveUpsell}>Remove upsell</Button>
+                  ) : (
+                    <Button variant="secondary" size="small" onPress={handleAddUpsell}>Add upsell</Button>
+                  )}
+                  <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
+                    {upsellApplied
+                      ? `${upsellInfo.additionalUnits} more added for ${upsellInfo.additionalCost.toFixed(2)} USD`
+                      : `${upsellInfo.additionalUnits} more for USD ${upsellInfo.additionalCost.toFixed(2)}`}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Artwork section */}
           <div ref={artworkRef} style={sectionCard}>
@@ -556,6 +611,9 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                   style={radioInputStyle}
                 />
                 <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>New artwork</span>
+                <span style={{ fontSize: "0.8125rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                  (A extra charge of USD 10.00 will be applicable)
+                </span>
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", flexWrap: "wrap" }}>
                 <input
