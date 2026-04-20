@@ -10,15 +10,11 @@ interface BreadcrumbItemDef {
 export function AppBreadcrumbs({ items }: { items: BreadcrumbItemDef[] }) {
   return (
     <Breadcrumbs aria-label="Current location">
-      {items.map((item, index) =>
-        item.href ? (
-          <BreadcrumbItem key={index} href={item.href}>
-            {item.label}
-          </BreadcrumbItem>
-        ) : (
-          <BreadcrumbItem key={index}>{item.label}</BreadcrumbItem>
-        )
-      )}
+      {items.map((item, index) => (
+        <BreadcrumbItem key={index} href={item.href ?? "#"}>
+          {item.label}
+        </BreadcrumbItem>
+      ))}
     </Breadcrumbs>
   );
 }
