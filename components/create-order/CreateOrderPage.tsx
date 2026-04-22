@@ -162,13 +162,10 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <Text as="span" variant="medium">{customer.name} ({customer.email})</Text>
               <div style={{ width: "1px", height: "16px", background: "var(--cim-border-subtle, #eaebeb)", flexShrink: 0 }} />
-              <Text as="span" variant="medium">Store: {customer.store}</Text>
-              <div style={{ width: "1px", height: "16px", background: "var(--cim-border-subtle, #eaebeb)", flexShrink: 0 }} />
               <Text as="span" variant="medium">Shopper ID: <CopyInline variant="body">{customer.shopperId}</CopyInline></Text>
             </div>
           </div>
           <div style={{ display: "flex", gap: "12px", alignItems: "center", flexShrink: 0 }}>
-            <Button variant="secondary" onPress={() => {}}>Add item from previous order</Button>
             <Button variant="primary" onPress={handleAddNewItem}>Add new item</Button>
           </div>
         </div>
