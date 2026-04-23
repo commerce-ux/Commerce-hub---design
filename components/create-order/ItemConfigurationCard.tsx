@@ -634,14 +634,6 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                     </div>
                   </div>
                 </div>
-                <a
-                  href="https://ui.cimpress.io"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", width: "fit-content" }}
-                >
-                  View pricing guide
-                </a>
               </div>
             </div>
           ) : (
@@ -762,17 +754,21 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                     </div>
                   </div>
                 </div>
-                <a
-                  href="https://ui.cimpress.io"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", width: "fit-content" }}
-                >
-                  View pricing guide
-                </a>
               </div>
             </div>
           )}
+
+          {/* View pricing guide section */}
+          <div style={sectionCard}>
+            <a
+              href="https://ui.cimpress.io"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", width: "fit-content" }}
+            >
+              View pricing guide
+            </a>
+          </div>
 
           {/* Artwork section */}
           <div ref={artworkRef} style={sectionCard}>
