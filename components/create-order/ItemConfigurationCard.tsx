@@ -520,7 +520,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                 })}
               </div>
               <div ref={quantityRef} style={{ borderTop: "1px solid var(--cim-border-subtle, #eaebeb)", padding: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", width: "100%" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", width: "100%", flexWrap: "wrap" }}>
                   {/* Left: field + stock */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -634,6 +634,14 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                     </div>
                   </div>
                 </div>
+                <a
+                  href="https://ui.cimpress.io"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", width: "fit-content" }}
+                >
+                  View pricing guide
+                </a>
               </div>
             </div>
           ) : (
@@ -754,21 +762,17 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                     </div>
                   </div>
                 </div>
+                <a
+                  href="https://ui.cimpress.io"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", width: "fit-content" }}
+                >
+                  View pricing guide
+                </a>
               </div>
             </div>
           )}
-
-          {/* View pricing guide section */}
-          <div style={sectionCard}>
-            <a
-              href="https://ui.cimpress.io"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", width: "fit-content" }}
-            >
-              View pricing guide
-            </a>
-          </div>
 
           {/* Artwork section */}
           <div ref={artworkRef} style={sectionCard}>
