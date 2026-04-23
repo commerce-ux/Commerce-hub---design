@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef, useCallback } from "react";
-import { Button, Select, SelectItem, TextField, Disclosure } from "@cimpress-ui/react";
-import { IconInfoCircle, IconCheckCircleFill } from "@cimpress-ui/react/icons";
+import { Button, Select, SelectItem, TextField, Disclosure, Badge } from "@cimpress-ui/react";
+import { IconInfoCircle, IconCheckCircleFill, IconChevronDown, IconChevronRight } from "@cimpress-ui/react/icons";
 import type { ProductCatalogItem, DraftOrderItem, DraftOrderItemAttribute, QuantityPricingTier } from "@/lib/types";
 import { PreviousArtworkModal } from "./PreviousArtworkModal";
 
@@ -263,9 +263,17 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [selectedChargeId, setSelectedChargeId] = useState<string | null>(null);
     const [isCustomQty, setIsCustomQty] = useState(false);
     const [customQtyInput, setCustomQtyInput] = useState("");
+    const [isPricingGuideOpen, setIsPricingGuideOpen] = useState(false);
+    const [showAllTiers, setShowAllTiers] = useState(false);
 
     const unitPrice = resolvePricingTier(product.pricingTiers, quantity);
     const basePrice = parseFloat((unitPrice * quantity).toFixed(2));
+
+    // Pricing guide
+    const PRICING_GUIDE_VISIBLE = 6;
+    const sortedTiersAll = [...product.pricingTiers].sort((a, b) => a.minQty - b.minQty);
+    const lowestUnitPrice = sortedTiersAll[0]?.unitPrice ?? 0; // baseline for savings %
+    const pricingGuideRows = showAllTiers ? sortedTiersAll : sortedTiersAll.slice(0, PRICING_GUIDE_VISIBLE);
     const selectedCharge = (product.extraCharges ?? []).find((c) => c.id === selectedChargeId);
     const artworkCharge = 10;
     const extraChargesTotal = parseFloat(((selectedCharge?.unitPrice ?? 0) + artworkCharge).toFixed(2));
@@ -640,14 +648,98 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                     </div>
                   </div>
                 </div>
-                <a
-                  href="https://ui.cimpress.io"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", width: "fit-content" }}
-                >
-                  View pricing guide
-                </a>
+                {/* Pricing guide disclosure */}
+                <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", overflow: "hidden" }}>
+                  <button
+                    onClick={() => setIsPricingGuideOpen((o) => !o)}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: "16px",
+                      padding: "12px 12px", background: "white", border: "none",
+                      cursor: "pointer", minHeight: "48px",
+                    }}
+                  >
+                    <span style={{ flexShrink: 0, display: "flex" }}>
+                      {isPricingGuideOpen ? <IconChevronDown /> : <IconChevronRight />}
+                    </span>
+                    <span style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>View pricing guide</span>
+                  </button>
+
+                  {isPricingGuideOpen && (
+                    <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px", borderTop: "1px solid var(--cim-border-base, #dadcdd)" }}>
+                      {pricingGuideRows.map((tier) => {
+                        const isSelected = quantity === tier.minQty;
+                        const tierTotal = (tier.minQty * tier.unitPrice).toFixed(2);
+                        const savings = lowestUnitPrice > 0
+                          ? Math.round((lowestUnitPrice - tier.unitPrice) / lowestUnitPrice * 100)
+                          : 0;
+                        return (
+                          <button
+                            key={tier.minQty}
+                            onClick={() => {
+                              setQuantityInput(String(tier.minQty));
+                              handleQuantityChange(tier.minQty);
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", justifyContent: "space-between",
+                              padding: "16px", borderRadius: "6px", width: "100%", cursor: "pointer",
+                              background: "white",
+                              border: isSelected
+                                ? "1.5px solid var(--cim-border-accent, #0091b8)"
+                                : "1px solid var(--cim-border-base, #dadcdd)",
+                              boxShadow: isSelected
+                                ? "0px 1px 1px 0px rgba(0,0,0,0.08), 0px 1px 3px 0px rgba(0,0,0,0.04)"
+                                : "none",
+                            }}
+                          >
+                            {/* Left: radio + qty + badge */}
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: "140px" }}>
+                              <div style={{
+                                width: "16px", height: "16px", borderRadius: "50%", flexShrink: 0,
+                                border: isSelected ? "none" : "1.5px solid var(--cim-fg-base, #15191d)",
+                                background: isSelected ? "var(--cim-bg-accent, #0281a1)" : "white",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}>
+                                {isSelected && <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "white" }} />}
+                              </div>
+                              <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{tier.minQty}</span>
+                              {isSelected && <Badge tone="base">Recommended</Badge>}
+                            </div>
+
+                            {/* Center: total + unit price */}
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
+                                {tierTotal} USD
+                              </span>
+                              <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                                {tier.unitPrice.toFixed(2)} USD / unit
+                              </span>
+                            </div>
+
+                            {/* Right: savings */}
+                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", minWidth: "80px", textAlign: "right" }}>
+                              {savings > 0 ? `${savings}% savings` : "—"}
+                            </span>
+                          </button>
+                        );
+                      })}
+
+                      {/* View more quantities */}
+                      {!showAllTiers && sortedTiersAll.length > PRICING_GUIDE_VISIBLE && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowAllTiers(true); }}
+                          style={{
+                            background: "none", border: "none", padding: 0,
+                            color: "var(--cim-fg-accent, #007798)", cursor: "pointer",
+                            textDecoration: "underline", fontSize: "1rem",
+                            alignSelf: "flex-start",
+                          }}
+                        >
+                          View more quantities
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
             </div>
           </div>
 
