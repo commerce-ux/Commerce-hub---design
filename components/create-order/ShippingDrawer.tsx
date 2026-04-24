@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button, TextField, Checkbox } from "@cimpress-ui/react";
 import { IconArrowLeft, IconCloseBold, IconDeliveryTruck } from "@cimpress-ui/react/icons";
 import type { SavedAddress, ShippingMethod, DraftOrderItem, DraftOrder } from "@/lib/types";
@@ -74,29 +74,50 @@ function computeReviewSummary(items: DraftOrderItem[]) {
   let totalDiscount = 0;
   let totalTax = 0;
   let accessoriesTotal = 0;
+  let setupCharges = 0;
+  let totalQty = 0;
+
+  // Merge accessories across all items by id
+  const accMap = new Map<string, { label: string; quantity: number; unitPrice: number }>();
 
   for (const item of items) {
     const gross = item.quantity * item.unitPrice;
     const discount = gross * (item.itemDiscount / 100);
     const taxRate = item.product.taxRate ?? 8;
-    const tax = item.lineTotal * (taxRate / 100);
+    const tax = (gross - discount) * (taxRate / 100);
     grossTotal += gross;
     totalDiscount += discount;
     totalTax += tax;
+    totalQty += item.quantity;
+    if (item.artworkType !== "none") {
+      setupCharges += 10;
+    }
     if (item.accessories) {
       for (const acc of item.accessories) {
+        const existing = accMap.get(acc.id);
+        if (existing) {
+          existing.quantity += acc.quantity;
+        } else {
+          accMap.set(acc.id, { label: acc.label, quantity: acc.quantity, unitPrice: acc.unitPrice });
+        }
         accessoriesTotal += acc.quantity * acc.unitPrice;
       }
     }
   }
 
-  const subtotal = parseFloat((grossTotal - totalDiscount + accessoriesTotal).toFixed(2));
+  const mergedAccessories = [...accMap.values()];
+  const totalCharges = parseFloat((setupCharges + accessoriesTotal).toFixed(2));
+  const subtotal = parseFloat((grossTotal - totalDiscount + totalCharges).toFixed(2));
   return {
     grossTotal: parseFloat(grossTotal.toFixed(2)),
     totalDiscount: parseFloat(totalDiscount.toFixed(2)),
+    setupCharges: parseFloat(setupCharges.toFixed(2)),
     accessoriesTotal: parseFloat(accessoriesTotal.toFixed(2)),
+    mergedAccessories,
+    totalCharges,
     subtotal,
     totalTax: parseFloat(totalTax.toFixed(2)),
+    totalQty,
   };
 }
 
@@ -115,6 +136,10 @@ export function ShippingDrawer({ isOpen, items, draftOrder, onClose, onReviewToC
   const [pendingMethodId, setPendingMethodId] = useState<string | null>(null);
   const [expandedMethodId, setExpandedMethodId] = useState<string | null>(firstMethod?.id ?? null);
   const [form, setForm] = useState<AddressForm>(EMPTY_FORM);
+
+  const reviewBodyRef = useRef<HTMLDivElement>(null);
+  const orderDetailsSectionRef = useRef<HTMLDivElement>(null);
+  const addressShippingSectionRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen) return null;
 
@@ -289,16 +314,11 @@ export function ShippingDrawer({ isOpen, items, draftOrder, onClose, onReviewToC
   if (view === "review") {
     const summary = computeReviewSummary(items);
     const totalDue = parseFloat((summary.subtotal + summary.totalTax + draftOrder.shippingEstimate).toFixed(2));
-    const itemCount = items.length;
     const taxRate = items[0]?.product.taxRate ?? 8;
 
-    // Accessory sub-rows
-    const accessoryRows = items.flatMap((item) =>
-      (item.accessories ?? []).map((acc) => ({
-        label: `${acc.label} added (${acc.quantity})`,
-        total: parseFloat((acc.quantity * acc.unitPrice).toFixed(2)),
-      }))
-    );
+    const itemCount = items.length;
+    // Artwork charges are baked into the displayed price at order level (not called out separately)
+    const orderPrice = parseFloat((summary.grossTotal + summary.setupCharges).toFixed(2));
 
     return (
       <DrawerShell onBackdropClick={onClose} width={620}>
@@ -316,15 +336,20 @@ export function ShippingDrawer({ isOpen, items, draftOrder, onClose, onReviewToC
             </h2>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs — navigation only, both sections always visible */}
           <div style={{ display: "flex", borderBottom: "2px solid var(--cim-border-base,#dadcdd)", padding: "0 16px", gap: "4px" }}>
-            {(["order-details", "address-shipping"] as ReviewTab[]).map((tab) => {
-              const label = tab === "order-details" ? "Order details" : "Address & shipping speed";
-              const isActive = reviewTab === tab;
+            {([
+              { id: "order-details" as ReviewTab, label: "Order details", ref: orderDetailsSectionRef },
+              { id: "address-shipping" as ReviewTab, label: "Address & shipping speed", ref: addressShippingSectionRef },
+            ]).map(({ id, label, ref: sectionRef }) => {
+              const isActive = reviewTab === id;
               return (
                 <button
-                  key={tab}
-                  onClick={() => setReviewTab(tab)}
+                  key={id}
+                  onClick={() => {
+                    setReviewTab(id);
+                    sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
                   style={{
                     background: "none",
                     border: "none",
@@ -345,187 +370,201 @@ export function ShippingDrawer({ isOpen, items, draftOrder, onClose, onReviewToC
             })}
           </div>
 
-          {/* Body */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* Body — both sections always rendered, tabs scroll to each */}
+          <div ref={reviewBodyRef} style={{ flex: 1, overflowY: "auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: "32px" }}>
 
-            {/* ── ORDER DETAILS TAB ── */}
-            {reviewTab === "order-details" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base,#15191d)" }}>
-                  Order details
-                </h3>
-                <div style={{
-                  border: "1px solid var(--cim-border-base,#dadcdd)",
-                  borderRadius: "6px",
-                  padding: "16px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                }}>
-                  <ReviewPriceRow
-                    label={`Total Price (${itemCount} item${itemCount !== 1 ? "s" : ""})`}
-                    value={`${summary.grossTotal.toFixed(2)} USD`}
-                  />
-                  <ReviewPriceRow
-                    label="Total Discount"
-                    value={`${summary.totalDiscount.toFixed(2)} USD`}
-                    accent={summary.totalDiscount > 0}
-                  />
-                  {summary.accessoriesTotal > 0 && (
-                    <>
+            {/* ── ORDER DETAILS SECTION ── */}
+            <div ref={orderDetailsSectionRef} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base,#15191d)" }}>
+                Order details
+              </h3>
+              <div style={{
+                border: "1px solid var(--cim-border-base,#dadcdd)",
+                borderRadius: "6px",
+                padding: "16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}>
+                {/* Price (N items) — includes artwork charges baked in */}
+                <ReviewPriceRow
+                  label={`Price (${itemCount} item${itemCount !== 1 ? "s" : ""})`}
+                  value={`${orderPrice.toFixed(2)} USD`}
+                />
+
+                {/* Discount — always shown, muted when 0 */}
+                <ReviewPriceRow
+                  label="Discount"
+                  value={summary.totalDiscount > 0 ? `-${summary.totalDiscount.toFixed(2)} USD` : "0.00 USD"}
+                  subtle={summary.totalDiscount === 0}
+                  accent={summary.totalDiscount > 0}
+                />
+
+                {/* Accessories with sub-rows */}
+                {summary.accessoriesTotal > 0 && (
+                  <>
+                    <ReviewPriceRow
+                      label={`Accessories (${summary.mergedAccessories.length})`}
+                      value={`${summary.accessoriesTotal.toFixed(2)} USD`}
+                    />
+                    {summary.mergedAccessories.map((acc, i) => (
                       <ReviewPriceRow
-                        label="Total charges applied"
-                        value={`${summary.accessoriesTotal.toFixed(2)} USD`}
+                        key={i}
+                        label={`${acc.label} × ${acc.quantity}`}
+                        value={`${(acc.quantity * acc.unitPrice).toFixed(2)} USD`}
+                        indent
+                        subtle
                       />
-                      {accessoryRows.map((row, i) => (
-                        <ReviewPriceRow key={i} label={row.label} value={`${row.total.toFixed(2)} USD`} indent />
-                      ))}
-                    </>
-                  )}
-                  <ReviewPriceRow
-                    label="Subtotal"
-                    value={`${summary.subtotal.toFixed(2)} USD`}
-                  />
-                  <ReviewPriceRow
-                    label={`Tax (${taxRate}%)`}
-                    value={`${summary.totalTax.toFixed(2)} USD`}
-                    subtle
-                  />
-                  <ReviewPriceRow
-                    label="Shipping cost"
-                    value={`${draftOrder.shippingEstimate.toFixed(2)} USD`}
-                    subtle={draftOrder.shippingEstimate === 0}
-                  />
+                    ))}
+                  </>
+                )}
 
-                  {/* Divider */}
-                  <div style={{ height: "1px", background: "var(--cim-border-base,#dadcdd)", margin: "4px 0" }} />
+                {/* Subtotal */}
+                <ReviewPriceRow
+                  label="Subtotal"
+                  value={`${summary.subtotal.toFixed(2)} USD`}
+                />
 
-                  {/* Total due */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base,#15191d)" }}>
-                      Total due
-                    </span>
-                    <span style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--cim-fg-base,#15191d)" }}>
-                      {totalDue.toFixed(2)} USD
-                    </span>
-                  </div>
+                {/* Tax */}
+                <ReviewPriceRow
+                  label={`Tax (${taxRate}%)`}
+                  value={`${summary.totalTax.toFixed(2)} USD`}
+                  subtle
+                />
+
+                {/* Shipping cost */}
+                <ReviewPriceRow
+                  label="Shipping cost"
+                  value={draftOrder.shippingEstimate === 0 ? "Free" : `${draftOrder.shippingEstimate.toFixed(2)} USD`}
+                  subtle={draftOrder.shippingEstimate === 0}
+                />
+
+                {/* Divider */}
+                <div style={{ height: "1px", background: "var(--cim-border-base,#dadcdd)", margin: "4px 0" }} />
+
+                {/* Total due */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base,#15191d)" }}>
+                    Total due
+                  </span>
+                  <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base,#15191d)" }}>
+                    {totalDue.toFixed(2)} USD
+                  </span>
                 </div>
               </div>
-            )}
+            </div>
 
-            {/* ── ADDRESS & SHIPPING TAB ── */}
-            {reviewTab === "address-shipping" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base,#15191d)" }}>
-                  Address &amp; shipping speed
-                </h3>
+            {/* ── ADDRESS & SHIPPING SECTION ── */}
+            <div ref={addressShippingSectionRef} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base,#15191d)" }}>
+                Address &amp; shipping speed
+              </h3>
 
-                {/* Combined address + method card */}
-                <div style={{
-                  border: "1px solid var(--cim-border-base,#dadcdd)",
-                  borderRadius: "6px",
-                  overflow: "hidden",
-                }}>
-                  {/* Shipping address */}
-                  <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base,#15191d)" }}>
-                      Shipping address
-                    </span>
-                    {shippingAddress ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontWeight: 600, fontSize: "1rem", color: "var(--cim-fg-base)" }}>{shippingAddress.name}</span>
-                          {shippingAddress.isDefault && <DefaultBadge />}
-                        </div>
-                        {shippingAddress.company && (
-                          <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base)" }}>{shippingAddress.company}</span>
-                        )}
-                        {shippingAddress.lines.map((line, i) => (
-                          <span key={i} style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>{line}</span>
-                        ))}
-                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>{shippingAddress.phone}</span>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-muted,#94979b)" }}>No shipping address selected</span>
-                    )}
-                  </div>
-
-                  {/* Divider */}
-                  <div style={{ height: "1px", background: "var(--cim-border-base,#dadcdd)" }} />
-
-                  {/* Shipping method */}
-                  <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base,#15191d)" }}>
-                      Shipping method
-                    </span>
-                    {selectedMethod ? (
-                      <div style={{
-                        background: "#f0fdf4",
-                        border: "1px solid #86efac",
-                        borderRadius: "6px",
-                        padding: "12px 16px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "8px",
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          <span style={{ display: "flex", flexShrink: 0, color: "var(--cim-fg-base)" }}>
-                            <IconDeliveryTruck />
-                          </span>
-                          <span style={{ flex: 1, fontWeight: 600, fontSize: "1rem", color: "var(--cim-fg-base)" }}>
-                            {selectedMethod.name}
-                          </span>
-                          <div style={{ textAlign: "right", flexShrink: 0 }}>
-                            <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--cim-fg-base)" }}>
-                              {selectedMethod.price.toFixed(2)} USD
-                            </div>
-                            <div style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle,#5f6469)" }}>Taxes excluded</div>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base,#15191d)" }}>
-                            Estimated arrival by {selectedMethod.estimatedDeliveryLabel}
-                          </span>
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                            <path d="M3 6l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </div>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-muted,#94979b)" }}>No shipping method selected</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Billing address card */}
-                <div style={{
-                  border: "1px solid var(--cim-border-base,#dadcdd)",
-                  borderRadius: "6px",
-                  padding: "16px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                }}>
+              {/* Combined address + method card */}
+              <div style={{
+                border: "1px solid var(--cim-border-base,#dadcdd)",
+                borderRadius: "6px",
+                overflow: "hidden",
+              }}>
+                {/* Shipping address */}
+                <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
                   <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base,#15191d)" }}>
-                    Billing address
+                    Shipping address
                   </span>
-                  {billingSameAsShipping ? (
-                    <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle,#5f6469)" }}>
-                      Billing address is same as shipping address
-                    </span>
-                  ) : billingAddress ? (
+                  {shippingAddress ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                      <span style={{ fontWeight: 600, fontSize: "1rem", color: "var(--cim-fg-base)" }}>{billingAddress.name}</span>
-                      {billingAddress.lines.map((line, i) => (
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontWeight: 600, fontSize: "1rem", color: "var(--cim-fg-base)" }}>{shippingAddress.name}</span>
+                        {shippingAddress.isDefault && <DefaultBadge />}
+                      </div>
+                      {shippingAddress.company && (
+                        <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base)" }}>{shippingAddress.company}</span>
+                      )}
+                      {shippingAddress.lines.map((line, i) => (
                         <span key={i} style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>{line}</span>
                       ))}
+                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>{shippingAddress.phone}</span>
                     </div>
                   ) : (
-                    <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-muted,#94979b)" }}>No billing address selected</span>
+                    <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-muted,#94979b)" }}>No shipping address selected</span>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div style={{ height: "1px", background: "var(--cim-border-base,#dadcdd)" }} />
+
+                {/* Shipping method */}
+                <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base,#15191d)" }}>
+                    Shipping method
+                  </span>
+                  {selectedMethod ? (
+                    <div style={{
+                      background: "#f0fdf4",
+                      border: "1px solid #86efac",
+                      borderRadius: "6px",
+                      padding: "12px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <span style={{ display: "flex", flexShrink: 0, color: "var(--cim-fg-base)" }}>
+                          <IconDeliveryTruck />
+                        </span>
+                        <span style={{ flex: 1, fontWeight: 600, fontSize: "1rem", color: "var(--cim-fg-base)" }}>
+                          {selectedMethod.name}
+                        </span>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--cim-fg-base)" }}>
+                            {selectedMethod.price.toFixed(2)} USD
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle,#5f6469)" }}>Taxes excluded</div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base,#15191d)" }}>
+                          Estimated arrival by {selectedMethod.estimatedDeliveryLabel}
+                        </span>
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                          <path d="M3 6l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-muted,#94979b)" }}>No shipping method selected</span>
                   )}
                 </div>
               </div>
-            )}
+
+              {/* Billing address card */}
+              <div style={{
+                border: "1px solid var(--cim-border-base,#dadcdd)",
+                borderRadius: "6px",
+                padding: "16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}>
+                <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base,#15191d)" }}>
+                  Billing address
+                </span>
+                {billingSameAsShipping ? (
+                  <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle,#5f6469)" }}>
+                    Billing address is same as shipping address
+                  </span>
+                ) : billingAddress ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <span style={{ fontWeight: 600, fontSize: "1rem", color: "var(--cim-fg-base)" }}>{billingAddress.name}</span>
+                    {billingAddress.lines.map((line, i) => (
+                      <span key={i} style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>{line}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-muted,#94979b)" }}>No billing address selected</span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Footer */}
@@ -684,19 +723,22 @@ export function ShippingDrawer({ isOpen, items, draftOrder, onClose, onReviewToC
                       <path d={expandedMethodId === selectedMethod.id ? "M3 10l5-5 5 5" : "M3 6l5 5 5-5"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
-                  {/* Expanded: item delivery lines + change link */}
+                  {/* Expanded: item delivery lines */}
                   {expandedMethodId === selectedMethod.id && (
-                    <div style={{ borderTop: "1px solid #86efac", padding: "10px 16px 14px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ borderTop: "1px solid #86efac", padding: "10px 16px 6px", display: "flex", flexDirection: "column", gap: "6px" }}>
                       {items.map((item) => (
                         <p key={item.draftItemId} style={{ margin: 0, fontSize: "0.875rem", color: "var(--cim-fg-base,#15191d)" }}>
                           {item.product.name}: {selectedMethod.estimatedDeliveryLabel}
                         </p>
                       ))}
-                      <button onClick={() => { setPendingMethodId(shippingMethodId); setView("select-shipping"); }} style={linkBtnStyle}>
-                        Change shipping method
-                      </button>
                     </div>
                   )}
+                  {/* Change link — always visible */}
+                  <div style={{ padding: "6px 16px 14px" }}>
+                    <button onClick={() => { setPendingMethodId(shippingMethodId); setView("select-shipping"); }} style={linkBtnStyle}>
+                      Change shipping method
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -787,6 +829,7 @@ export function ShippingDrawer({ isOpen, items, draftOrder, onClose, onReviewToC
 const linkBtnStyle: React.CSSProperties = {
   background: "none", border: "none", padding: 0, cursor: "pointer",
   fontSize: "0.875rem", color: "var(--cim-fg-accent,#007798)", textDecoration: "underline",
+  alignSelf: "flex-start", textAlign: "left",
 };
 
 const accentLinkStyle: React.CSSProperties = {

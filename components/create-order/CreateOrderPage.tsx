@@ -18,8 +18,12 @@ interface CreateOrderPageProps {
 }
 
 function computeTotals(items: DraftOrderItem[]): Pick<DraftOrder, "subtotal" | "taxEstimate" | "total"> {
+  // lineTotal is the pre-tax subtotal per item; tax is computed per-item using its product's tax rate
   const subtotal = parseFloat(items.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2));
-  const taxEstimate = parseFloat((subtotal * 0.08).toFixed(2));
+  const taxEstimate = parseFloat(items.reduce((sum, item) => {
+    const taxRate = item.product.taxRate ?? 8;
+    return sum + item.lineTotal * taxRate / 100;
+  }, 0).toFixed(2));
   const total = parseFloat((subtotal + taxEstimate).toFixed(2));
   return { subtotal, taxEstimate, total };
 }
@@ -98,7 +102,11 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
       if (i.draftItemId !== draftItemId) return i;
       const tiers = i.product.pricingTiers;
       const unitPrice = [...tiers].reverse().find((t) => newQty >= t.minQty)?.unitPrice ?? tiers[0]?.unitPrice ?? 0;
-      const lineTotal = parseFloat((unitPrice * newQty * (1 - i.itemDiscount / 100)).toFixed(2));
+      const basePrice = unitPrice * newQty * (1 - i.itemDiscount / 100);
+      const artworkCharge = i.artworkType !== "none" ? 10 : 0;
+      const accessoriesTotal = (i.accessories ?? []).reduce((sum, a) => sum + a.quantity * a.unitPrice, 0);
+      // lineTotal = pre-tax subtotal (base + artwork + accessories)
+      const lineTotal = parseFloat((basePrice + artworkCharge + accessoriesTotal).toFixed(2));
       return { ...i, quantity: newQty, unitPrice, lineTotal };
     }));
   }

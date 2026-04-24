@@ -126,7 +126,7 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     baseUnitPrice: 0.12,
     pricingTiers: [
       { minQty: 25, maxQty: 99, unitPrice: 0.18 },
-      { minQty: 100, maxQty: 499, unitPrice: 0.12 },
+      { minQty: 100, maxQty: 499, unitPrice: 0.12, recommended: true },
       { minQty: 500, maxQty: null, unitPrice: 0.09 },
     ],
     attributes: [
@@ -172,7 +172,7 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     baseUnitPrice: 0.08,
     pricingTiers: [
       { minQty: 50, maxQty: 249, unitPrice: 0.10 },
-      { minQty: 250, maxQty: 999, unitPrice: 0.08 },
+      { minQty: 250, maxQty: 999, unitPrice: 0.08, recommended: true },
       { minQty: 1000, maxQty: null, unitPrice: 0.06 },
     ],
     attributes: [
@@ -217,7 +217,7 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     baseUnitPrice: 12.50,
     pricingTiers: [
       { minQty: 1, maxQty: 4, unitPrice: 15.00 },
-      { minQty: 5, maxQty: 19, unitPrice: 12.50 },
+      { minQty: 5, maxQty: 19, unitPrice: 12.50, recommended: true },
       { minQty: 20, maxQty: null, unitPrice: 10.00 },
     ],
     attributes: [
@@ -262,7 +262,7 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     baseUnitPrice: 0.07,
     pricingTiers: [
       { minQty: 100, maxQty: 499, unitPrice: 0.09 },
-      { minQty: 500, maxQty: 1999, unitPrice: 0.07 },
+      { minQty: 500, maxQty: 1999, unitPrice: 0.07, recommended: true },
       { minQty: 2000, maxQty: null, unitPrice: 0.05 },
     ],
     attributes: [
@@ -316,7 +316,7 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     baseUnitPrice: 0.04,
     pricingTiers: [
       { minQty: 250, maxQty: 999, unitPrice: 0.05 },
-      { minQty: 1000, maxQty: 4999, unitPrice: 0.04 },
+      { minQty: 1000, maxQty: 4999, unitPrice: 0.04, recommended: true },
       { minQty: 5000, maxQty: null, unitPrice: 0.03 },
     ],
     attributes: [
@@ -361,7 +361,7 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     baseUnitPrice: 8.50,
     pricingTiers: [
       { minQty: 1, maxQty: 11, unitPrice: 10.00 },
-      { minQty: 12, maxQty: 47, unitPrice: 8.50 },
+      { minQty: 12, maxQty: 47, unitPrice: 8.50, recommended: true },
       { minQty: 48, maxQty: null, unitPrice: 7.00 },
     ],
     attributes: [
@@ -410,7 +410,7 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     baseUnitPrice: 45.00,
     pricingTiers: [
       { minQty: 1, maxQty: 2, unitPrice: 55.00 },
-      { minQty: 3, maxQty: 9, unitPrice: 45.00 },
+      { minQty: 3, maxQty: 9, unitPrice: 45.00, recommended: true },
       { minQty: 10, maxQty: null, unitPrice: 38.00 },
     ],
     attributes: [
@@ -454,7 +454,7 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     baseUnitPrice: 0.65,
     pricingTiers: [
       { minQty: 10, maxQty: 49, unitPrice: 0.80 },
-      { minQty: 50, maxQty: 199, unitPrice: 0.65 },
+      { minQty: 50, maxQty: 199, unitPrice: 0.65, recommended: true },
       { minQty: 200, maxQty: null, unitPrice: 0.50 },
     ],
     attributes: [
@@ -499,7 +499,7 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     baseUnitPrice: 0.10,
     pricingTiers: [
       { minQty: 50, maxQty: 99, unitPrice: 0.14 },
-      { minQty: 100, maxQty: 249, unitPrice: 0.10 },
+      { minQty: 100, maxQty: 249, unitPrice: 0.10, recommended: true },
       { minQty: 250, maxQty: 499, unitPrice: 0.08 },
       { minQty: 500, maxQty: null, unitPrice: 0.06 },
     ],
@@ -560,7 +560,7 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     pricingTiers: [
       { minQty: 50, maxQty: 99, unitPrice: 1.59 },
       { minQty: 100, maxQty: 149, unitPrice: 1.53 },
-      { minQty: 150, maxQty: 249, unitPrice: 1.46 },
+      { minQty: 150, maxQty: 249, unitPrice: 1.46, recommended: true },
       { minQty: 250, maxQty: 299, unitPrice: 1.38 },
       { minQty: 300, maxQty: 350, unitPrice: 1.33 },
     ],

@@ -265,8 +265,9 @@ export function AddNewItemView({ customer, editingItem, onAddComplete, onCancel 
           maxWidth: "870px",
         }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <span style={{ fontSize: "1rem", fontWeight: 600, color: itemTotal > 0 ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)", whiteSpace: "nowrap" }}>
-              Item total {itemTotal.toFixed(2)} USD
+            {/* Always derived from priceBreakdown so it's never stale */}
+            <span style={{ fontSize: "1rem", fontWeight: 600, color: (priceBreakdown?.totalDue ?? 0) > 0 ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)", whiteSpace: "nowrap" }}>
+              Item total {(priceBreakdown?.totalDue ?? itemTotal).toFixed(2)} USD
             </span>
             {priceBreakdown && (
               <PopoverRoot>
@@ -279,43 +280,55 @@ export function AddNewItemView({ customer, editingItem, onAddComplete, onCancel 
                 </Button>
                 <Popover title="Item Price" placement="top">
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px", minWidth: "300px" }}>
+                    {/* Base price */}
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
                       <span>Price ({priceBreakdown.quantity} qty)</span>
                       <span>{priceBreakdown.basePrice.toFixed(2)} USD</span>
                     </div>
+                    {/* Selected extra charge — direct line */}
+                    {priceBreakdown.selectedChargeLabel && (
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                        <span>{priceBreakdown.selectedChargeLabel}</span>
+                        <span>{priceBreakdown.selectedChargePrice?.toFixed(2)} USD</span>
+                      </div>
+                    )}
+                    {/* Discount */}
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
                       <span>Discount</span>
-                      <span>0.00 USD</span>
+                      <span style={{ color: "var(--cim-fg-muted, #94979b)" }}>0.00 USD</span>
                     </div>
-                    {priceBreakdown.chargesApplied > 0 && (
+                    {/* Artwork charge */}
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                      <span>{priceBreakdown.artworkOption === "customise" ? "Artwork customisation" : "New artwork"}</span>
+                      <span>10.00 USD</span>
+                    </div>
+                    {/* Accessories */}
+                    {priceBreakdown.accessories.length > 0 && (
                       <>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                          <span>Total charges applied ({priceBreakdown.chargesApplied})</span>
-                          <span>{priceBreakdown.extraChargesTotal.toFixed(2)} USD</span>
+                          <span>Accessories ({priceBreakdown.accessories.length})</span>
+                          <span>{priceBreakdown.accessoriesTotal.toFixed(2)} USD</span>
                         </div>
-                        {priceBreakdown.selectedChargeLabel && (
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                            <span>{priceBreakdown.selectedChargeLabel}</span>
-                            <span>{priceBreakdown.selectedChargePrice?.toFixed(2)} USD</span>
+                        {priceBreakdown.accessories.map((acc) => (
+                          <div key={acc.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--cim-fg-subtle, #5f6469)", paddingLeft: "12px" }}>
+                            <span>{acc.label} × {acc.quantity}</span>
+                            <span>{(acc.quantity * acc.unitPrice).toFixed(2)} USD</span>
                           </div>
-                        )}
-                        {priceBreakdown.hasArtworkCharge && (
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                            <span>Artwork customisation</span>
-                            <span>10.00 USD</span>
-                          </div>
-                        )}
+                        ))}
                       </>
                     )}
+                    {/* Subtotal */}
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
                       <span>Subtotal</span>
                       <span>{priceBreakdown.subtotal.toFixed(2)} USD</span>
                     </div>
+                    {/* Tax */}
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
                       <span>Tax ({priceBreakdown.taxRate}%)</span>
                       <span>{priceBreakdown.tax.toFixed(2)} USD</span>
                     </div>
                     <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)", margin: "4px 0" }} />
+                    {/* Total due */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                       <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base)" }}>Total due</span>
                       <span style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>

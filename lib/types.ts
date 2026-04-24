@@ -106,6 +106,7 @@ export interface QuantityPricingTier {
   minQty: number;
   maxQty: number | null; // null = no upper bound
   unitPrice: number; // USD per unit
+  recommended?: boolean;
 }
 
 export interface ProductCatalogItem {

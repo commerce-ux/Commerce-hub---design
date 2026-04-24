@@ -38,26 +38,24 @@ function PriceRow({
 }
 
 function computeSummary(items: DraftOrderItem[]) {
-  let grossTotal = 0;
+  // lineTotal is the pre-tax subtotal per item (base + artwork + extras + accessories, after item discount)
+  let preTaxTotal = 0;
   let totalDiscount = 0;
-  let totalCharges = 0;
   let totalTax = 0;
 
   for (const item of items) {
-    const gross = item.quantity * item.unitPrice;
-    const discount = gross * (item.itemDiscount / 100);
     const taxRate = item.product.taxRate ?? 8;
-    const tax = item.lineTotal * (taxRate / 100);
-    grossTotal += gross;
-    totalDiscount += discount;
-    totalTax += tax;
+    const itemDiscount = item.quantity * item.unitPrice * (item.itemDiscount / 100);
+    preTaxTotal += item.lineTotal;
+    totalDiscount += itemDiscount;
+    totalTax += item.lineTotal * taxRate / 100;
   }
 
-  const subtotal = parseFloat((grossTotal - totalDiscount + totalCharges).toFixed(2));
+  const grossTotal = parseFloat((preTaxTotal + totalDiscount).toFixed(2)); // before item discounts
+  const subtotal = parseFloat(preTaxTotal.toFixed(2));                      // after item discounts
   return {
-    grossTotal: parseFloat(grossTotal.toFixed(2)),
+    grossTotal,
     totalDiscount: parseFloat(totalDiscount.toFixed(2)),
-    totalCharges: parseFloat(totalCharges.toFixed(2)),
     subtotal,
     totalTax: parseFloat(totalTax.toFixed(2)),
     total: parseFloat((subtotal + totalTax).toFixed(2)),
@@ -128,12 +126,6 @@ export function OrderSummaryPanel({
           value={`${summary.totalDiscount.toFixed(2)} USD`}
           accent={summary.totalDiscount > 0}
         />
-        {summary.totalCharges > 0 && (
-          <PriceRow
-            label="Total charges applied"
-            value={`${summary.totalCharges.toFixed(2)} USD`}
-          />
-        )}
         <PriceRow
           label="Subtotal"
           value={`${summary.subtotal.toFixed(2)} USD`}

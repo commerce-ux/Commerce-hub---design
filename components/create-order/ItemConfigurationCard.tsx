@@ -2,9 +2,10 @@
 
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef, useCallback } from "react";
 import { Button, Select, SelectItem, TextField, Disclosure, Badge } from "@cimpress-ui/react";
-import { IconInfoCircle, IconCheckCircleFill, IconChevronDown, IconChevronRight } from "@cimpress-ui/react/icons";
+import { IconInfoCircle, IconCheckCircleFill, IconChevronRight } from "@cimpress-ui/react/icons";
 import type { ProductCatalogItem, DraftOrderItem, DraftOrderItemAttribute, QuantityPricingTier } from "@/lib/types";
 import { PreviousArtworkModal } from "./PreviousArtworkModal";
+import { AccessoryCard, MOCK_ACCESSORIES } from "./AddAccessoryModal";
 
 const TAB_LABELS = [
   "Attributes",
@@ -25,6 +26,9 @@ export interface PriceBreakdown {
   selectedChargeLabel?: string;
   selectedChargePrice?: number;
   hasArtworkCharge: boolean;
+  artworkOption: "new" | "customise";
+  accessoriesTotal: number;
+  accessories: { id: string; label: string; quantity: number; unitPrice: number }[];
   subtotal: number;
   taxRate: number;
   tax: number;
@@ -197,6 +201,59 @@ const radioInputStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
+// ── Artwork preview (shared between New artwork + Customise as before) ─────────
+function ArtworkPreview({
+  fileName,
+  onRemove,
+  onChanges,
+}: {
+  fileName: string;
+  onRemove: () => void;
+  onChanges?: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {/* Thumbnail */}
+      <div style={{
+        width: "187px",
+        height: "187px",
+        borderRadius: "6px",
+        overflow: "hidden",
+        background: "var(--cim-bg-subtle, #f8f9fa)",
+      }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=300&h=300&fit=crop"
+          alt={fileName}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      </div>
+      {/* Actions row */}
+      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <Button tone="critical" size="small" onPress={onRemove}>
+          Remove artwork
+        </Button>
+        {onChanges && (
+          <Button variant="secondary" size="small" onPress={onChanges}>
+            Change artwork
+          </Button>
+        )}
+        <span style={{
+          fontSize: "0.875rem",
+          color: "var(--cim-fg-base, #15191d)",
+          flex: 1,
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}>
+          {fileName}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, ItemConfigurationCardProps>(
   ({ product, initialValues, onAddToOrder, onLineTotalChange, onValidityChange, onPriceBreakdownChange }, ref) => {
     const [activeTab, setActiveTab] = useState<TabLabel>("Attributes");
@@ -219,19 +276,20 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
 
     const defaultAttributes: DraftOrderItemAttribute[] = product.attributes.map((attr) => ({
       attributeId: attr.id,
+      // No pre-selection — start empty unless editing an existing item
       selectedOptionId:
-        initialValues?.selectedAttributes.find((a) => a.attributeId === attr.id)?.selectedOptionId ??
-        attr.options[0]?.id ??
-        "",
+        initialValues?.selectedAttributes.find((a) => a.attributeId === attr.id)?.selectedOptionId ?? "",
     }));
 
     const [selectedAttributes, setSelectedAttributes] = useState<DraftOrderItemAttribute[]>(defaultAttributes);
-    const [quantity, setQuantity] = useState<number>(initialValues?.quantity ?? product.minOrderQty);
+    const [quantity, setQuantity] = useState<number>(initialValues?.quantity ?? 0);
     const [upsellApplied, setUpsellApplied] = useState(false);
     const [preUpsellQuantity, setPreUpsellQuantity] = useState<number | null>(null);
     const [upsellInfo, setUpsellInfo] = useState<UpsellSuggestion | null>(null);
     const [quantityInput, setQuantityInput] = useState<string>(initialValues?.quantity != null ? String(initialValues.quantity) : "");
-    const [artworkOption, setArtworkOption] = useState<"new" | "customise">("new");
+    const [artworkOption, setArtworkOption] = useState<"new" | "customise" | null>(
+      initialValues ? (initialValues.artworkType === "upload" ? "new" : "customise") : null
+    );
     const [artworkFileName, setArtworkFileName] = useState<string>(initialValues?.artworkFileName ?? "");
     const [isArtworkModalOpen, setIsArtworkModalOpen] = useState(false);
     const waitingForStudio = useRef(false);
@@ -263,22 +321,29 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [selectedChargeId, setSelectedChargeId] = useState<string | null>(null);
     const [isCustomQty, setIsCustomQty] = useState(false);
     const [customQtyInput, setCustomQtyInput] = useState("");
-    const [isPricingGuideOpen, setIsPricingGuideOpen] = useState(false);
     const [showAllTiers, setShowAllTiers] = useState(false);
+    const [pricingGuideSelected, setPricingGuideSelected] = useState<number | null>(null);
+    const [isPricingGuideOpen, setIsPricingGuideOpen] = useState(false);
+    const [addedAccessories, setAddedAccessories] = useState<import("@/lib/types").DraftOrderItemAccessory[]>([]);
+    const [showAllAccessories, setShowAllAccessories] = useState(false);
+    const [isChargesExpanded, setIsChargesExpanded] = useState(false);
+    const [isAccessoriesExpanded, setIsAccessoriesExpanded] = useState(false);
 
     const unitPrice = resolvePricingTier(product.pricingTiers, quantity);
-    const basePrice = parseFloat((unitPrice * quantity).toFixed(2));
+    // basePrice is 0 until the user has entered a quantity
+    const basePrice = quantityInput ? parseFloat((unitPrice * quantity).toFixed(2)) : 0;
 
     // Pricing guide
-    const PRICING_GUIDE_VISIBLE = 6;
+    const PRICING_GUIDE_VISIBLE = 10;
     const sortedTiersAll = [...product.pricingTiers].sort((a, b) => a.minQty - b.minQty);
-    const lowestUnitPrice = sortedTiersAll[0]?.unitPrice ?? 0; // baseline for savings %
     const pricingGuideRows = showAllTiers ? sortedTiersAll : sortedTiersAll.slice(0, PRICING_GUIDE_VISIBLE);
     const selectedCharge = (product.extraCharges ?? []).find((c) => c.id === selectedChargeId);
-    const artworkCharge = 10;
+    // Artwork charge only applies once the user has selected an artwork option
+    const artworkCharge = artworkOption !== null ? 10 : 0;
     const extraChargesTotal = parseFloat(((selectedCharge?.unitPrice ?? 0) + artworkCharge).toFixed(2));
-    const chargesApplied = (selectedCharge ? 1 : 0) + 1;
-    const subtotal = parseFloat((basePrice + extraChargesTotal).toFixed(2));
+    const chargesApplied = (selectedCharge ? 1 : 0) + (artworkOption !== null ? 1 : 0);
+    const accessoriesTotal = parseFloat(addedAccessories.reduce((sum, a) => sum + a.quantity * a.unitPrice, 0).toFixed(2));
+    const subtotal = parseFloat((basePrice + extraChargesTotal + accessoriesTotal).toFixed(2));
     const taxRate = product.taxRate ?? 8;
     const tax = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
     const totalDue = parseFloat((subtotal + tax).toFixed(2));
@@ -318,6 +383,9 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
         selectedChargeLabel: selectedCharge?.label,
         selectedChargePrice: selectedCharge?.unitPrice,
         hasArtworkCharge: artworkOption === "customise",
+        artworkOption: artworkOption ?? "new",
+        accessoriesTotal,
+        accessories: addedAccessories.map((a) => ({ id: a.id, label: a.label, quantity: a.quantity, unitPrice: a.unitPrice })),
         subtotal,
         taxRate,
         tax,
@@ -331,16 +399,19 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     }, [isValid, onValidityChange]);
 
     useEffect(() => {
-      const startQty = initialValues?.quantity ?? product.minOrderQty;
+      const startQty = initialValues?.quantity ?? 0;
       setSelectedAttributes(defaultAttributes);
       setQuantity(startQty);
       setUpsellApplied(false);
       setPreUpsellQuantity(null);
-      setUpsellInfo(computeUpsell(product, startQty));
+      setUpsellInfo(null);
       setQuantityInput(initialValues?.quantity != null ? String(initialValues.quantity) : "");
-      setArtworkOption("new");
-      setArtworkFileName("");
+      setArtworkOption(initialValues ? (initialValues.artworkType === "upload" ? "new" : "customise") : null);
+      setArtworkFileName(initialValues?.artworkFileName ?? "");
       setSelectedChargeId(null);
+      setPricingGuideSelected(null);
+      setAddedAccessories([]);
+      setShowAllAccessories(false);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [product.id]);
 
@@ -350,15 +421,17 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
         product,
         selectedAttributes,
         quantity,
-        artworkType: artworkOption === "new" ? "upload" : "none",
+        artworkType: artworkOption === "new" ? "upload" : artworkOption === "customise" ? "url" : "none",
         artworkUrl: "",
         artworkFileName,
         itemDiscount: 0,
         unitPrice,
-        lineTotal: totalDue,
+        // lineTotal is the pre-tax subtotal; tax is computed separately downstream
+        lineTotal: subtotal,
+        accessories: addedAccessories,
       };
       onAddToOrder(item);
-    }, [product, selectedAttributes, quantity, artworkOption, artworkFileName, unitPrice, totalDue, onAddToOrder, initialValues]);
+    }, [product, selectedAttributes, quantity, artworkOption, artworkFileName, unitPrice, subtotal, addedAccessories, onAddToOrder, initialValues]);
 
     useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
@@ -444,309 +517,257 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
             </div>
           </div>
 
-          {/* Attributes section */}
-          {product.attributes.length > 0 && (
-            <div ref={attributesRef} style={sectionCard}>
-              <p style={sectionHeading}>Attributes</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                {product.attributes.map((attr) => {
-                  const currentVal = selectedAttributes.find((a) => a.attributeId === attr.id)?.selectedOptionId ?? "";
-                  if (attr.type === "color") {
-                    return (
-                      <div key={attr.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{attr.label}</span>
-                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                          {attr.options.map((opt) => {
-                            const isSelected = currentVal === opt.id;
-                            return (
-                              <button
-                                key={opt.id}
-                                title={opt.label}
-                                aria-label={opt.label}
-                                aria-pressed={isSelected}
-                                onClick={() => handleAttributeChange(attr.id, opt.id)}
-                                style={{
-                                  width: "30px",
-                                  height: "30px",
-                                  borderRadius: "6px",
-                                  background: opt.hexColor ?? "#ccc",
-                                  border: isSelected ? "2px solid var(--cim-fg-accent, #0091b8)" : "2px solid transparent",
-                                  outline: isSelected ? "1px solid var(--cim-fg-accent, #0091b8)" : "none",
-                                  outlineOffset: "2px",
-                                  cursor: "pointer",
-                                  flexShrink: 0,
-                                  padding: 0,
-                                }}
-                              />
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  }
-                  if (attr.type === "radio") {
-                    return (
-                      <div key={attr.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{attr.label}</span>
-                        <div style={{ display: "flex", gap: "24px", alignItems: "center" }}>
-                          {attr.options.map((opt) => {
-                            const isSelected = currentVal === opt.id;
-                            return (
-                              <label
-                                key={opt.id}
-                                style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}
-                              >
-                                <input
-                                  type="radio"
-                                  name={`attr-${attr.id}`}
-                                  value={opt.id}
-                                  checked={isSelected}
-                                  onChange={() => handleAttributeChange(attr.id, opt.id)}
-                                  style={radioInputStyle}
-                                />
-                                <span style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>{opt.label}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={attr.id} style={{ width: "378px", maxWidth: "100%" }}>
-                      <Select
-                        label={attr.label}
-                        selectedKey={currentVal}
-                        onSelectionChange={(val) => handleAttributeChange(attr.id, String(val))}
-                      >
-                        {attr.options.map((opt) => (
-                          <SelectItem key={opt.id} id={opt.id}>{opt.label}</SelectItem>
-                        ))}
-                      </Select>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Quantity section */}
-          <div ref={quantityRef} style={{ ...sectionCard, padding: 0, gap: 0, overflow: "hidden" }}>
-            <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                <p style={sectionHeading}>Quantity</p>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", width: "100%" }}>
-                  {/* Left: field + stock */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <TextField
-                          label="Quantity"
-                          value={quantityInput}
-                          placeholder="Enter quantity"
-                          description={`Between ${product.minOrderQty} – ${product.maxOrderQty}`}
-                          isInvalid={
-                            quantityInput !== "" && (isNaN(parseInt(quantityInput, 10)) || parseInt(quantityInput, 10) < product.minOrderQty || parseInt(quantityInput, 10) > product.maxOrderQty)
-                              ? true
-                              : false
-                          }
-                          error={
-                            quantityInput !== "" && parseInt(quantityInput, 10) < product.minOrderQty
-                              ? `Minimum is ${product.minOrderQty}`
-                              : quantityInput !== "" && parseInt(quantityInput, 10) > product.maxOrderQty
-                              ? `Maximum is ${product.maxOrderQty}`
-                              : undefined
-                          }
-                          onChange={(val) => {
-                            setQuantityInput(val);
-                            const n = parseInt(val, 10);
-                            if (!isNaN(n) && n >= product.minOrderQty && n <= product.maxOrderQty) {
-                              handleQuantityChange(n);
-                            }
-                          }}
-                          inputMode="numeric"
-                        />
-                      </div>
-                      <div style={{ marginTop: "20px", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", flexShrink: 0 }}>
-                        <IconInfoCircle />
-                      </div>
-                    </div>
-                    {product.stockQuantity !== undefined && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ color: "var(--cim-fg-success, #007e3f)", display: "flex" }}>
-                          <IconCheckCircleFill />
-                        </span>
-                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                          In stock - {product.stockQuantity}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  {/* Unit price */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "200px", flexShrink: 0 }}>
-                    <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "20px" }}>Unit price</span>
-                    <div style={{
-                      display: "flex", alignItems: "center",
-                      minHeight: "40px", borderRadius: "4px",
-                      border: "1px solid var(--cim-border-base, #dadcdd)",
-                      background: "var(--cim-bg-subtle, #f8f9fa)",
-                      overflow: "hidden",
-                    }}>
-                      {quantityInput === "" ? (
-                        <span style={{
-                          flex: 1, padding: "8px 12px",
-                          fontSize: "1rem", lineHeight: "24px",
-                          color: "var(--cim-fg-muted, #94979b)",
-                        }}>—</span>
-                      ) : (
-                        <>
-                          <span style={{
-                            padding: "8px 8px 8px 12px",
-                            fontSize: "1rem", lineHeight: "24px",
-                            color: "var(--cim-fg-subtle, #5f6469)",
-                            flexShrink: 0,
-                          }}>USD</span>
-                          <span style={{
-                            flex: 1, padding: "8px 12px",
-                            fontSize: "1rem", lineHeight: "24px",
-                            color: "var(--cim-fg-base, #15191d)",
-                          }}>{unitPrice.toFixed(2)}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {/* Subtotal */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "200px", flexShrink: 0 }}>
-                    <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "20px" }}>Subtotal</span>
-                    <div style={{
-                      display: "flex", alignItems: "center",
-                      minHeight: "40px", borderRadius: "4px",
-                      border: "1px solid var(--cim-border-base, #dadcdd)",
-                      background: "var(--cim-bg-subtle, #f8f9fa)",
-                      overflow: "hidden",
-                    }}>
-                      {quantityInput === "" ? (
-                        <span style={{
-                          flex: 1, padding: "8px 12px",
-                          fontSize: "1rem", lineHeight: "24px",
-                          color: "var(--cim-fg-muted, #94979b)",
-                        }}>—</span>
-                      ) : (
-                        <>
-                          <span style={{
-                            padding: "8px 8px 8px 12px",
-                            fontSize: "1rem", lineHeight: "24px",
-                            color: "var(--cim-fg-subtle, #5f6469)",
-                            flexShrink: 0,
-                          }}>USD</span>
-                          <span style={{
-                            flex: 1, padding: "8px 12px",
-                            fontSize: "1rem", lineHeight: "24px",
-                            color: "var(--cim-fg-base, #15191d)",
-                          }}>{basePrice.toFixed(2)}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                {/* Pricing guide disclosure */}
-                <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", overflow: "hidden" }}>
+          {/* Combined Attributes + Quantity section */}
+          <div ref={attributesRef} style={sectionCard}>
+            {/* Attributes */}
+            {product.attributes.length > 0 && (
+              <>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <p style={sectionHeading}>Attributes</p>
                   <button
-                    onClick={() => setIsPricingGuideOpen((o) => !o)}
+                    onClick={() => {
+                      setSelectedAttributes(product.attributes.map((attr) => ({ attributeId: attr.id, selectedOptionId: "" })));
+                      setQuantityInput("");
+                      setQuantity(product.minOrderQty);
+                      setUpsellApplied(false);
+                      setPreUpsellQuantity(null);
+                      setUpsellInfo(null);
+                      setPricingGuideSelected(null);
+                    }}
                     style={{
-                      width: "100%", display: "flex", alignItems: "center", gap: "16px",
-                      padding: "12px 12px", background: "white", border: "none",
-                      cursor: "pointer", minHeight: "48px",
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      color: "var(--cim-fg-accent, #007798)",
+                      fontSize: "0.875rem",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      flexShrink: 0,
                     }}
                   >
-                    <span style={{ flexShrink: 0, display: "flex" }}>
-                      {isPricingGuideOpen ? <IconChevronDown /> : <IconChevronRight />}
-                    </span>
-                    <span style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>View pricing guide</span>
+                    Clear all selections
                   </button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {product.attributes.map((attr) => {
+                    const currentVal = selectedAttributes.find((a) => a.attributeId === attr.id)?.selectedOptionId ?? "";
+                    if (attr.type === "color") {
+                      return (
+                        <div key={attr.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{attr.label}</span>
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                            {attr.options.map((opt) => {
+                              const isSelected = currentVal === opt.id;
+                              return (
+                                <button
+                                  key={opt.id}
+                                  title={opt.label}
+                                  aria-label={opt.label}
+                                  aria-pressed={isSelected}
+                                  onClick={() => handleAttributeChange(attr.id, opt.id)}
+                                  style={{
+                                    width: "30px",
+                                    height: "30px",
+                                    borderRadius: "6px",
+                                    background: opt.hexColor ?? "#ccc",
+                                    border: isSelected ? "2px solid var(--cim-fg-accent, #0091b8)" : "2px solid transparent",
+                                    outline: isSelected ? "1px solid var(--cim-fg-accent, #0091b8)" : "none",
+                                    outlineOffset: "2px",
+                                    cursor: "pointer",
+                                    flexShrink: 0,
+                                    padding: 0,
+                                  }}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (attr.type === "radio") {
+                      return (
+                        <div key={attr.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{attr.label}</span>
+                          <div style={{ display: "flex", gap: "24px", alignItems: "center" }}>
+                            {attr.options.map((opt) => {
+                              const isSelected = currentVal === opt.id;
+                              return (
+                                <label
+                                  key={opt.id}
+                                  style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`attr-${attr.id}`}
+                                    value={opt.id}
+                                    checked={isSelected}
+                                    onChange={() => handleAttributeChange(attr.id, opt.id)}
+                                    style={radioInputStyle}
+                                  />
+                                  <span style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>{opt.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={attr.id} style={{ width: "378px", maxWidth: "100%" }}>
+                        <Select
+                          label={attr.label}
+                          selectedKey={currentVal}
+                          onSelectionChange={(val) => handleAttributeChange(attr.id, String(val))}
+                        >
+                          {attr.options.map((opt) => (
+                            <SelectItem key={opt.id} id={opt.id}>{opt.label}</SelectItem>
+                          ))}
+                        </Select>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ height: "1px", background: "var(--cim-border-subtle, #eaebeb)" }} />
+              </>
+            )}
 
-                  {isPricingGuideOpen && (
-                    <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px", borderTop: "1px solid var(--cim-border-base, #dadcdd)" }}>
-                      {pricingGuideRows.map((tier) => {
-                        const isSelected = quantity === tier.minQty;
-                        const tierTotal = (tier.minQty * tier.unitPrice).toFixed(2);
-                        const savings = lowestUnitPrice > 0
-                          ? Math.round((lowestUnitPrice - tier.unitPrice) / lowestUnitPrice * 100)
-                          : 0;
-                        return (
-                          <button
-                            key={tier.minQty}
-                            onClick={() => {
-                              setQuantityInput(String(tier.minQty));
-                              handleQuantityChange(tier.minQty);
-                            }}
-                            style={{
-                              display: "flex", alignItems: "center", justifyContent: "space-between",
-                              padding: "16px", borderRadius: "6px", width: "100%", cursor: "pointer",
-                              background: "white",
-                              border: isSelected
-                                ? "1.5px solid var(--cim-border-accent, #0091b8)"
-                                : "1px solid var(--cim-border-base, #dadcdd)",
-                              boxShadow: isSelected
-                                ? "0px 1px 1px 0px rgba(0,0,0,0.08), 0px 1px 3px 0px rgba(0,0,0,0.04)"
-                                : "none",
-                            }}
-                          >
-                            {/* Left: radio + qty + badge */}
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: "140px" }}>
-                              <div style={{
-                                width: "16px", height: "16px", borderRadius: "50%", flexShrink: 0,
-                                border: isSelected ? "none" : "1.5px solid var(--cim-fg-base, #15191d)",
-                                background: isSelected ? "var(--cim-bg-accent, #0281a1)" : "white",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                              }}>
-                                {isSelected && <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "white" }} />}
-                              </div>
-                              <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{tier.minQty}</span>
-                              {isSelected && <Badge tone="base">Recommended</Badge>}
-                            </div>
-
-                            {/* Center: total + unit price */}
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
-                                {tierTotal} USD
-                              </span>
-                              <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                                {tier.unitPrice.toFixed(2)} USD / unit
-                              </span>
-                            </div>
-
-                            {/* Right: savings */}
-                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", minWidth: "80px", textAlign: "right" }}>
-                              {savings > 0 ? `${savings}% savings` : "—"}
-                            </span>
-                          </button>
-                        );
-                      })}
-
-                      {/* View more quantities */}
-                      {!showAllTiers && sortedTiersAll.length > PRICING_GUIDE_VISIBLE && (
+            {/* Quantity */}
+            <div ref={quantityRef} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <p style={sectionHeading}>Quantity</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxWidth: "378px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <TextField
+                      label="Quantity"
+                      value={quantityInput}
+                      placeholder="Enter quantity"
+                      description={`Between ${product.minOrderQty} – ${product.maxOrderQty}`}
+                      isInvalid={
+                        quantityInput !== "" && (isNaN(parseInt(quantityInput, 10)) || parseInt(quantityInput, 10) < product.minOrderQty || parseInt(quantityInput, 10) > product.maxOrderQty)
+                          ? true
+                          : false
+                      }
+                      error={
+                        quantityInput !== "" && parseInt(quantityInput, 10) < product.minOrderQty
+                          ? `Minimum is ${product.minOrderQty}`
+                          : quantityInput !== "" && parseInt(quantityInput, 10) > product.maxOrderQty
+                          ? `Maximum is ${product.maxOrderQty}`
+                          : undefined
+                      }
+                      onChange={(val) => {
+                        setQuantityInput(val);
+                        const n = parseInt(val, 10);
+                        if (!isNaN(n) && n >= product.minOrderQty && n <= product.maxOrderQty) {
+                          handleQuantityChange(n);
+                        }
+                      }}
+                      onFocus={() => setIsPricingGuideOpen(true)}
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div style={{ marginTop: "20px", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", flexShrink: 0 }}>
+                    <IconInfoCircle />
+                  </div>
+                </div>
+                {product.stockQuantity !== undefined && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ color: "var(--cim-fg-success, #007e3f)", display: "flex" }}>
+                      <IconCheckCircleFill />
+                    </span>
+                    <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
+                      In stock - {product.stockQuantity}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {/* Pricing guide disclosure */}
+              <Disclosure
+                title="View pricing guide"
+                variant="subtle"
+                isExpanded={isPricingGuideOpen}
+                onExpandedChange={setIsPricingGuideOpen}
+              >
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {pricingGuideRows.map((tier) => {
+                      const isSelected = pricingGuideSelected === tier.minQty;
+                      const tierTotal = (tier.minQty * tier.unitPrice).toFixed(2);
+                      return (
                         <button
-                          onClick={(e) => { e.stopPropagation(); setShowAllTiers(true); }}
+                          key={tier.minQty}
+                          onClick={() => {
+                            setPricingGuideSelected(tier.minQty);
+                            setQuantityInput(String(tier.minQty));
+                            handleQuantityChange(tier.minQty);
+                          }}
                           style={{
-                            background: "none", border: "none", padding: 0,
-                            color: "var(--cim-fg-accent, #007798)", cursor: "pointer",
-                            textDecoration: "underline", fontSize: "1rem",
-                            alignSelf: "flex-start",
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            padding: "16px", borderRadius: "6px", width: "100%", cursor: "pointer",
+                            background: "white",
+                            border: isSelected
+                              ? "1.5px solid var(--cim-border-accent, #0091b8)"
+                              : "1px solid var(--cim-border-base, #dadcdd)",
+                            boxShadow: isSelected
+                              ? "0px 1px 1px 0px rgba(0,0,0,0.08), 0px 1px 3px 0px rgba(0,0,0,0.04)"
+                              : "none",
                           }}
                         >
-                          View more quantities
+                          {/* Left: qty + badge */}
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{tier.minQty}</span>
+                            {tier.recommended && <Badge tone="base">Recommended</Badge>}
+                          </div>
+
+                          {/* Right: total + unit price */}
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
+                              {tierTotal} USD
+                            </span>
+                            <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                              {tier.unitPrice.toFixed(2)} USD / unit
+                            </span>
+                          </div>
                         </button>
-                      )}
-                    </div>
-                  )}
+                      );
+                    })}
+
+                    {/* View more quantities */}
+                    {!showAllTiers && sortedTiersAll.length > PRICING_GUIDE_VISIBLE && (
+                      <button
+                        onClick={() => setShowAllTiers(true)}
+                        style={{
+                          background: "none", border: "none", padding: 0,
+                          color: "var(--cim-fg-accent, #007798)", cursor: "pointer",
+                          textDecoration: "underline", fontSize: "1rem",
+                          alignSelf: "flex-start",
+                        }}
+                      >
+                        View more quantities
+                      </button>
+                    )}
+                  </div>
+              </Disclosure>
+            </div>
+          </div>
+
+          {/* Item total row */}
+          <div style={{ ...sectionCard, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>Item total</span>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: "1.25rem", fontWeight: 600, color: quantityInput ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)" }}>
+                {quantityInput ? `${basePrice.toFixed(2)} USD` : "—"}
+              </div>
+              {quantityInput && (
+                <div style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)", marginTop: "2px" }}>
+                  {quantity} x USD {unitPrice.toFixed(2)} / unit
                 </div>
+              )}
             </div>
           </div>
 
           {/* Artwork section */}
           <div ref={artworkRef} style={sectionCard}>
             <p style={sectionHeading}>Artwork</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
                 <input
                   type="radio"
@@ -756,8 +777,8 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                   onChange={() => { setArtworkOption("new"); setArtworkFileName(""); }}
                   style={radioInputStyle}
                 />
-                <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>New artwork</span>
-                <span style={{ fontSize: "0.8125rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                <span style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>New artwork</span>
+                <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-base, #15191d)" }}>
                   (A extra charge of USD 10.00 will be applicable)
                 </span>
               </label>
@@ -769,84 +790,101 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                   checked={artworkOption === "customise"}
                   onChange={() => { setArtworkOption("customise"); setIsArtworkModalOpen(true); }}
                   style={radioInputStyle}
+                  onClick={() => { if (artworkOption !== "customise") setIsArtworkModalOpen(true); }}
                 />
-                <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Customise as before</span>
-                <span style={{ fontSize: "0.8125rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                <span style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>Customise as before</span>
+                <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
                   (A extra charge of USD 10.00 will be applicable)
                 </span>
               </label>
             </div>
             {artworkOption === "new" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
-                  Add new artwork <span style={{ color: "var(--cim-fg-critical, #d10023)" }}>*</span>
-                </span>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  {artworkFileName ? (
-                    <>
-                      <button
-                        onClick={() => setArtworkFileName("")}
-                        style={{
-                          padding: "5px 12px",
-                          border: "1px solid var(--cim-fg-critical, #d10023)",
-                          borderRadius: "4px",
-                          background: "white",
-                          color: "var(--cim-fg-critical, #d10023)",
-                          fontSize: "0.875rem",
-                          fontWeight: 500,
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Remove artwork
-                      </button>
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{artworkFileName}</span>
-                    </>
-                  ) : (
-                    <a
-                      href="https://pens.experience.cimpress.io/us/studio/?key=PRD-ZQO1BK4YA&productVersion=4&locale=en-us&selectedOptions=%7B%22Substrate%20Color%22%3A%22%23000000%22%7D&fullBleedElected=true&mpvId=portAuthorityWomensBrickJacketClone&qty=%7b%22S%22%3a0%2c%22M%22%3a0%2c%223XL%22%3a0%2c%22XS%22%3a5%7d"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ textDecoration: "none" }}
-                      onClick={() => { waitingForStudio.current = true; }}
-                    >
-                      <Button variant="secondary" size="small">Add artwork</Button>
-                    </a>
-                  )}
+                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Add new artwork</span>
+                  <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-critical, #d10023)" }}>*</span>
                 </div>
+                {artworkFileName ? (
+                  <ArtworkPreview fileName={artworkFileName} onRemove={() => setArtworkFileName("")} />
+                ) : (
+                  <a
+                    href="https://pens.experience.cimpress.io/us/studio/?key=PRD-ZQO1BK4YA&productVersion=4&locale=en-us&selectedOptions=%7B%22Substrate%20Color%22%3A%22%23000000%22%7D&fullBleedElected=true&mpvId=portAuthorityWomensBrickJacketClone&qty=%7b%22S%22%3a0%2c%22M%22%3a0%2c%223XL%22%3a0%2c%22XS%22%3a5%7d"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: "none", display: "inline-flex" }}
+                    onClick={() => { waitingForStudio.current = true; }}
+                  >
+                    <Button variant="secondary" size="small">Add artwork</Button>
+                  </a>
+                )}
               </div>
             )}
             {artworkOption === "customise" && artworkFileName && (
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <button
-                  onClick={() => setIsArtworkModalOpen(true)}
-                  style={{
-                    padding: "5px 12px",
-                    border: "1px solid var(--cim-border-base, #dadcdd)",
-                    borderRadius: "4px",
-                    background: "white",
-                    color: "var(--cim-fg-accent, #007798)",
-                    fontSize: "0.875rem",
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Change artwork
-                </button>
-                <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{artworkFileName}</span>
-              </div>
+              <ArtworkPreview
+                fileName={artworkFileName}
+                onRemove={() => { setArtworkFileName(""); }}
+                onChanges={() => setIsArtworkModalOpen(true)}
+              />
             )}
           </div>
 
           {/* Add-ons section */}
-          <div ref={addOnsRef} style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", overflow: "hidden" }}>
-            <Disclosure title="Add-ons" variant="subtle">
-              <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: "8px", alignItems: "flex-start" }}>
-                <Button variant="secondary" size="small">Add new accessory</Button>
+          {(() => {
+            const addedCount = addedAccessories.length;
+            const addedTotal = addedAccessories.reduce((sum, a) => sum + a.quantity * a.unitPrice, 0);
+            const visibleAccessories = showAllAccessories ? MOCK_ACCESSORIES : MOCK_ACCESSORIES.slice(0, 3);
+            return (
+              <div ref={addOnsRef} style={{ position: "relative", border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", overflow: "hidden" }}>
+                <Disclosure title="Add accessory" variant="subtle">
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "4px 16px 16px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+                      {visibleAccessories.map((acc) => {
+                        const isAdded = addedAccessories.some((a) => a.id === acc.id);
+                        return (
+                          <AccessoryCard
+                            key={acc.id}
+                            item={acc}
+                            isAdded={isAdded}
+                            onAdd={(added) => setAddedAccessories((prev) => [...prev, added])}
+                            onRemove={() => setAddedAccessories((prev) => prev.filter((a) => a.id !== acc.id))}
+                          />
+                        );
+                      })}
+                    </div>
+                    {MOCK_ACCESSORIES.length > 3 && (
+                      <button
+                        onClick={() => setShowAllAccessories((prev) => !prev)}
+                        style={{
+                          background: "none", border: "none", padding: 0,
+                          color: "var(--cim-fg-accent, #007798)", cursor: "pointer",
+                          textDecoration: "underline", fontSize: "1rem",
+                          alignSelf: "flex-start",
+                        }}
+                      >
+                        {showAllAccessories ? "Hide all accessories" : "View all accessories"}
+                      </button>
+                    )}
+                  </div>
+                </Disclosure>
+                {/* Badge overlay — pinned to the right of the 48px disclosure header */}
+                {addedCount > 0 && (
+                  <div style={{
+                    position: "absolute",
+                    right: "12px",
+                    top: 0,
+                    height: "48px",
+                    display: "flex",
+                    alignItems: "center",
+                    pointerEvents: "none",
+                  }}>
+                    <Badge tone="base">
+                      {addedCount} (USD {addedTotal.toFixed(2)})
+                    </Badge>
+                  </div>
+                )}
               </div>
-            </Disclosure>
-          </div>
+            );
+          })()}
 
           {/* Item price section */}
           <div ref={itemPriceRef} style={{
@@ -856,53 +894,108 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
             padding: "16px",
             display: "flex",
             flexDirection: "column",
-            gap: "8px",
+            gap: "16px",
           }}>
             <p style={sectionHeading}>Item Price</p>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+
+              {/* Base price */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
                 <span>Price ({quantity} qty)</span>
                 <span>{basePrice.toFixed(2)} USD</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                <span>Discount</span>
-                <span>0.00 USD</span>
-              </div>
-              {chargesApplied > 0 && (
-                <>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                    <span>Total charges applied ({chargesApplied})</span>
-                    <span>{extraChargesTotal.toFixed(2)} USD</span>
-                  </div>
-                  {selectedCharge && (
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                      <span>{selectedCharge.label}</span>
-                      <span>{selectedCharge.unitPrice.toFixed(2)} USD</span>
-                    </div>
-                  )}
-                  {artworkOption === "customise" && (
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                      <span>Artwork customisation</span>
-                      <span>10.00 USD</span>
-                    </div>
-                  )}
-                </>
+
+              {/* Selected extra charge — shown as its own direct line */}
+              {selectedCharge && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                  <span>{selectedCharge.label}</span>
+                  <span>{selectedCharge.unitPrice.toFixed(2)} USD</span>
+                </div>
               )}
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+
+              {/* Discount */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                <span>Discount</span>
+                <span style={{ color: "var(--cim-fg-muted, #94979b)" }}>0.00 USD</span>
+              </div>
+
+              {/* Total charges applied — collapsible, only shown when at least one charge applies */}
+              {chargesApplied > 0 && (
+                <div>
+                  <button
+                    onClick={() => setIsChargesExpanded((v) => !v)}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      Total charges applied ({chargesApplied})
+                      <span style={{ display: "flex", color: "var(--cim-fg-subtle, #5f6469)", transform: isChargesExpanded ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform 0.15s" }}>
+                        <IconChevronRight size={16} />
+                      </span>
+                    </span>
+                    <span>{extraChargesTotal.toFixed(2)} USD</span>
+                  </button>
+                  {isChargesExpanded && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "6px", paddingLeft: "12px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                        <span>{artworkOption === "customise" ? "Artwork customisation" : "New artwork charge"}</span>
+                        <span>10.00 USD</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Accessory added — collapsible, only when accessories exist */}
+              {addedAccessories.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setIsAccessoriesExpanded((v) => !v)}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      Accessory added ({addedAccessories.length})
+                      <span style={{ display: "flex", color: "var(--cim-fg-subtle, #5f6469)", transform: isAccessoriesExpanded ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform 0.15s" }}>
+                        <IconChevronRight size={16} />
+                      </span>
+                    </span>
+                    <span>{accessoriesTotal.toFixed(2)} USD</span>
+                  </button>
+                  {isAccessoriesExpanded && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "6px", paddingLeft: "12px" }}>
+                      {addedAccessories.map((acc) => (
+                        <div key={acc.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                          <span>{acc.label} × {acc.quantity}</span>
+                          <span>{(acc.quantity * acc.unitPrice).toFixed(2)} USD</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Subtotal */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
                 <span>Subtotal</span>
                 <span>{subtotal.toFixed(2)} USD</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+
+              {/* Tax */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
                 <span>Tax ({taxRate}%)</span>
                 <span>{tax.toFixed(2)} USD</span>
               </div>
-              <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)", margin: "4px 0" }} />
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base)" }}>Total due</span>
-                <span style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
+
+              {/* Divider */}
+              <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)" }} />
+
+              {/* Total due */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "28px" }}>Total due</span>
+                <span style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "36px" }}>
                   {totalDue.toFixed(2)} USD
                 </span>
               </div>
+
             </div>
           </div>
 
@@ -915,7 +1008,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
               setIsArtworkModalOpen(false);
             }}
             onCancel={() => {
-              setArtworkOption("new");
+              setArtworkOption(null);
               setArtworkFileName("");
               setIsArtworkModalOpen(false);
             }}
