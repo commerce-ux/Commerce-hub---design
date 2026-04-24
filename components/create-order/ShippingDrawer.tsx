@@ -70,54 +70,27 @@ function ReviewPriceRow({
 }
 
 function computeReviewSummary(items: DraftOrderItem[]) {
-  let grossTotal = 0;
+  // lineTotal is the pre-tax subtotal per item (base + artwork + accessories, after discount)
+  let preTaxTotal = 0;
   let totalDiscount = 0;
   let totalTax = 0;
-  let accessoriesTotal = 0;
-  let setupCharges = 0;
-  let totalQty = 0;
-
-  // Merge accessories across all items by id
-  const accMap = new Map<string, { label: string; quantity: number; unitPrice: number }>();
 
   for (const item of items) {
-    const gross = item.quantity * item.unitPrice;
-    const discount = gross * (item.itemDiscount / 100);
     const taxRate = item.product.taxRate ?? 8;
-    const tax = (gross - discount) * (taxRate / 100);
-    grossTotal += gross;
-    totalDiscount += discount;
-    totalTax += tax;
-    totalQty += item.quantity;
-    if (item.artworkType !== "none") {
-      setupCharges += 10;
-    }
-    if (item.accessories) {
-      for (const acc of item.accessories) {
-        const existing = accMap.get(acc.id);
-        if (existing) {
-          existing.quantity += acc.quantity;
-        } else {
-          accMap.set(acc.id, { label: acc.label, quantity: acc.quantity, unitPrice: acc.unitPrice });
-        }
-        accessoriesTotal += acc.quantity * acc.unitPrice;
-      }
-    }
+    const itemDiscount = item.quantity * item.unitPrice * (item.itemDiscount / 100);
+    preTaxTotal += item.lineTotal;
+    totalDiscount += itemDiscount;
+    totalTax += item.lineTotal * taxRate / 100;
   }
 
-  const mergedAccessories = [...accMap.values()];
-  const totalCharges = parseFloat((setupCharges + accessoriesTotal).toFixed(2));
-  const subtotal = parseFloat((grossTotal - totalDiscount + totalCharges).toFixed(2));
+  const grossTotal = parseFloat((preTaxTotal + totalDiscount).toFixed(2)); // before item discounts
+  const subtotal = parseFloat(preTaxTotal.toFixed(2));                      // after item discounts
   return {
-    grossTotal: parseFloat(grossTotal.toFixed(2)),
+    grossTotal,
     totalDiscount: parseFloat(totalDiscount.toFixed(2)),
-    setupCharges: parseFloat(setupCharges.toFixed(2)),
-    accessoriesTotal: parseFloat(accessoriesTotal.toFixed(2)),
-    mergedAccessories,
-    totalCharges,
     subtotal,
     totalTax: parseFloat(totalTax.toFixed(2)),
-    totalQty,
+    totalQty: items.reduce((sum, i) => sum + i.quantity, 0),
   };
 }
 
@@ -317,8 +290,8 @@ export function ShippingDrawer({ isOpen, items, draftOrder, onClose, onReviewToC
     const taxRate = items[0]?.product.taxRate ?? 8;
 
     const itemCount = items.length;
-    // Artwork charges are baked into the displayed price at order level (not called out separately)
-    const orderPrice = parseFloat((summary.grossTotal + summary.setupCharges).toFixed(2));
+    // grossTotal = sum of lineTotals (pre-tax), includes base + artwork + accessories — the full item cost
+    const orderPrice = summary.grossTotal;
 
     return (
       <DrawerShell onBackdropClick={onClose} width={620}>
@@ -399,25 +372,6 @@ export function ShippingDrawer({ isOpen, items, draftOrder, onClose, onReviewToC
                   subtle={summary.totalDiscount === 0}
                   accent={summary.totalDiscount > 0}
                 />
-
-                {/* Accessories with sub-rows */}
-                {summary.accessoriesTotal > 0 && (
-                  <>
-                    <ReviewPriceRow
-                      label={`Accessories (${summary.mergedAccessories.length})`}
-                      value={`${summary.accessoriesTotal.toFixed(2)} USD`}
-                    />
-                    {summary.mergedAccessories.map((acc, i) => (
-                      <ReviewPriceRow
-                        key={i}
-                        label={`${acc.label} × ${acc.quantity}`}
-                        value={`${(acc.quantity * acc.unitPrice).toFixed(2)} USD`}
-                        indent
-                        subtle
-                      />
-                    ))}
-                  </>
-                )}
 
                 {/* Subtotal */}
                 <ReviewPriceRow
