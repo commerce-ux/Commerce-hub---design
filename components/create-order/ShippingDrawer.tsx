@@ -455,12 +455,10 @@ export function ShippingDrawer({ isOpen, items, draftOrder, onClose, onReviewToC
                       background: "#f0fdf4",
                       border: "1px solid #86efac",
                       borderRadius: "6px",
-                      padding: "12px 16px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "8px",
+                      overflow: "hidden",
                     }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      {/* Method name + price */}
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px" }}>
                         <span style={{ display: "flex", flexShrink: 0, color: "var(--cim-fg-base)" }}>
                           <IconDeliveryTruck />
                         </span>
@@ -474,14 +472,28 @@ export function ShippingDrawer({ isOpen, items, draftOrder, onClose, onReviewToC
                           <div style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle,#5f6469)" }}>Taxes excluded</div>
                         </div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base,#15191d)" }}>
+                      {/* Estimated arrival + chevron toggle */}
+                      <div
+                        onClick={() => setExpandedMethodId(expandedMethodId === selectedMethod.id ? null : selectedMethod.id)}
+                        style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", padding: "0 16px 12px" }}
+                      >
+                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base,#15191d)", flex: 1 }}>
                           Estimated arrival by {selectedMethod.estimatedDeliveryLabel}
                         </span>
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                          <path d="M3 6l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d={expandedMethodId === selectedMethod.id ? "M3 10l5-5 5 5" : "M3 6l5 5 5-5"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       </div>
+                      {/* Expanded: per-item delivery lines */}
+                      {expandedMethodId === selectedMethod.id && (
+                        <div style={{ borderTop: "1px solid #86efac", padding: "10px 16px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {items.map((item) => (
+                            <p key={item.draftItemId} style={{ margin: 0, fontSize: "0.875rem", color: "var(--cim-fg-base,#15191d)" }}>
+                              {item.product.name}: {selectedMethod.estimatedDeliveryLabel}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-muted,#94979b)" }}>No shipping method selected</span>

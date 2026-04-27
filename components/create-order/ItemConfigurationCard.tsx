@@ -518,7 +518,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
           </div>
 
           {/* Combined Attributes + Quantity section */}
-          <div ref={attributesRef} style={sectionCard}>
+          <div ref={attributesRef} style={{ ...sectionCard, border: "none", padding: "0" }}>
             {/* Attributes */}
             {product.attributes.length > 0 && (
               <>
@@ -627,13 +627,11 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                     );
                   })}
                 </div>
-                <div style={{ height: "1px", background: "var(--cim-border-subtle, #eaebeb)" }} />
               </>
             )}
 
             {/* Quantity */}
             <div ref={quantityRef} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <p style={sectionHeading}>Quantity</p>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxWidth: "378px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
