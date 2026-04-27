@@ -122,6 +122,8 @@ export interface ProductCatalogItem {
   stockQuantity?: number;
   extraCharges?: ProductExtraCharge[];
   taxRate?: number; // percentage e.g. 5.33
+  quantityMode?: "per-size"; // when set, quantity is entered per size and aggregated
+  availableSizes?: string[]; // e.g. ["XS","S","M","L","XL","2XL","3XL","4XL","5XL","6XL"]
 }
 
 export interface DraftOrderItemAttribute {
@@ -140,7 +142,8 @@ export interface DraftOrderItem {
   draftItemId: string; // client-side UUID
   product: ProductCatalogItem;
   selectedAttributes: DraftOrderItemAttribute[];
-  quantity: number;
+  quantity: number; // total quantity (aggregated across sizes for per-size products)
+  sizeQuantities?: Record<string, number>; // per-size breakdown when product.quantityMode === "per-size"
   artworkType: "upload" | "url" | "none";
   artworkUrl: string;
   artworkFileName: string;

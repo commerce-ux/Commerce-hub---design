@@ -131,7 +131,7 @@ export function OrderSummaryPanel({
           value={`${summary.subtotal.toFixed(2)} USD`}
         />
         <PriceRow
-          label={`Tax (${draftOrder.items[0]?.product.taxRate ?? 8}%)`}
+          label="Tax"
           value={`${summary.totalTax.toFixed(2)} USD`}
           subtle={!hasItems}
         />

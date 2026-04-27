@@ -90,6 +90,18 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
     if (editingItem?.draftItemId === draftItemId) setEditingItem(null);
   }
 
+  function handleAccessoryRemove(draftItemId: string, accessoryId: string) {
+    setItems((prev) => prev.map((item) => {
+      if (item.draftItemId !== draftItemId) return item;
+      const updatedAccessories = (item.accessories ?? []).filter((a) => a.id !== accessoryId);
+      const accessoriesTotal = updatedAccessories.reduce((sum, a) => sum + a.quantity * a.unitPrice, 0);
+      const basePrice = item.unitPrice * item.quantity * (1 - item.itemDiscount / 100);
+      const artworkCharge = item.artworkType !== "none" ? 10 : 0;
+      const lineTotal = parseFloat((basePrice + artworkCharge + accessoriesTotal).toFixed(2));
+      return { ...item, accessories: updatedAccessories, lineTotal };
+    }));
+  }
+
   function handleDuplicateItem(draftItemId: string) {
     const item = items.find((i) => i.draftItemId === draftItemId);
     if (item) {
@@ -203,6 +215,7 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
                 onRemoveItem={handleRemoveItem}
                 onDuplicateItem={handleDuplicateItem}
                 onQuantityChange={handleQuantityChangeItem}
+                onAccessoryRemove={handleAccessoryRemove}
                 editingItem={editingItem}
               />
             )}

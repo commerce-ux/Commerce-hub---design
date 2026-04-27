@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Checkbox, Button, Disclosure, AlertDialog, AlertDialogBody, AlertDialogActions,
   TextField,
@@ -21,6 +21,7 @@ interface OrderItemsListProps {
   onRemove: (draftItemId: string) => void;
   onDuplicate: (draftItemId: string) => void;
   onQuantityChange?: (draftItemId: string, newQty: number) => void;
+  onAccessoryRemove?: (draftItemId: string, accessoryId: string) => void;
 }
 
 const iconBtnStyle: React.CSSProperties = {
@@ -36,10 +37,24 @@ const iconBtnStyle: React.CSSProperties = {
   color: "var(--cim-fg-subtle, #5f6469)",
 };
 
-export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantityChange }: OrderItemsListProps) {
+export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantityChange, onAccessoryRemove }: OrderItemsListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [removingAccessory, setRemovingAccessory] = useState<{ itemId: string; accessoryId: string } | null>(null);
+  const [sizePopoverOpenId, setSizePopoverOpenId] = useState<string | null>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Close size popover on outside click
+  useEffect(() => {
+    if (!sizePopoverOpenId) return;
+    function handleOutsideClick(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setSizePopoverOpenId(null);
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [sizePopoverOpenId]);
 
   if (items.length === 0) return null;
 
@@ -115,7 +130,12 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
           <Button
             variant="primary"
             tone="critical"
-            onPress={() => setRemovingAccessory(null)}
+            onPress={() => {
+              if (removingAccessory) {
+                onAccessoryRemove?.(removingAccessory.itemId, removingAccessory.accessoryId);
+              }
+              setRemovingAccessory(null);
+            }}
           >
             Remove
           </Button>
@@ -254,11 +274,13 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                   {/* Quantity field + stock (left) */}
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px", minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
                         <TextField
-                          label="Quantity"
+                          label={item.product.quantityMode === "per-size" ? "Total Quantity" : "Quantity"}
                           value={String(item.quantity)}
-                          description={`Between ${item.product.minOrderQty} – ${item.product.maxOrderQty}`}
+                          description={item.product.quantityMode !== "per-size"
+                            ? `Between ${item.product.minOrderQty} – ${item.product.maxOrderQty}`
+                            : undefined}
                           isInvalid={
                             item.quantity < item.product.minOrderQty || item.quantity > item.product.maxOrderQty
                           }
@@ -269,12 +291,97 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                             }
                           }}
                           inputMode="numeric"
-                          isDisabled={!onQuantityChange}
+                          isDisabled={!onQuantityChange || item.product.quantityMode === "per-size"}
+                          isReadOnly={item.product.quantityMode === "per-size"}
                         />
+
+                        {/* Clickable "Aggregated across sizes" description + popover */}
+                        {item.product.quantityMode === "per-size" && (
+                          <div style={{ position: "relative" }} ref={sizePopoverOpenId === item.draftItemId ? popoverRef : undefined}>
+                            <button
+                              onClick={() => setSizePopoverOpenId(
+                                sizePopoverOpenId === item.draftItemId ? null : item.draftItemId
+                              )}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                padding: "2px 0 0",
+                                cursor: "pointer",
+                                fontSize: "0.875rem",
+                                color: "var(--cim-fg-accent, #007798)",
+                                textDecoration: "underline",
+                                textDecorationStyle: "dotted",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                            >
+                              <IconInfoCircle size={16} />
+                              Aggregated across sizes
+                            </button>
+
+                            {sizePopoverOpenId === item.draftItemId && (
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: "calc(100% + 6px)",
+                                  left: 0,
+                                  zIndex: 200,
+                                  background: "white",
+                                  border: "1px solid var(--cim-border-base, #dadcdd)",
+                                  borderRadius: "8px",
+                                  padding: "12px 14px",
+                                  boxShadow: "0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)",
+                                  minWidth: "200px",
+                                  maxWidth: "280px",
+                                }}
+                              >
+                                <p style={{ margin: "0 0 10px", fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
+                                  Size breakdown
+                                </p>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                  {item.product.availableSizes
+                                    ? item.product.availableSizes.map((size) => {
+                                        const qty = item.sizeQuantities?.[size] ?? 0;
+                                        return (
+                                          <div
+                                            key={size}
+                                            style={{
+                                              display: "flex",
+                                              justifyContent: "space-between",
+                                              alignItems: "center",
+                                              padding: "4px 8px",
+                                              borderRadius: "4px",
+                                              background: qty > 0 ? "var(--cim-bg-info-subtle, #e8f4f8)" : "transparent",
+                                            }}
+                                          >
+                                            <span style={{ fontSize: "0.875rem", color: qty > 0 ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)", fontWeight: qty > 0 ? 600 : 400 }}>
+                                              {size}
+                                            </span>
+                                            <span style={{ fontSize: "0.875rem", color: qty > 0 ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)", fontWeight: qty > 0 ? 600 : 400 }}>
+                                              {qty}
+                                            </span>
+                                          </div>
+                                        );
+                                      })
+                                    : (
+                                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-muted)" }}>No size data</span>
+                                    )}
+                                </div>
+                                <div style={{ borderTop: "1px solid var(--cim-border-subtle, #eaebeb)", marginTop: "10px", paddingTop: "8px", display: "flex", justifyContent: "space-between" }}>
+                                  <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>Total</span>
+                                  <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{item.quantity}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div style={{ marginTop: "20px", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", flexShrink: 0 }}>
-                        <IconInfoCircle />
-                      </div>
+                      {item.product.quantityMode !== "per-size" && (
+                        <div style={{ marginTop: "20px", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", flexShrink: 0 }}>
+                          <IconInfoCircle />
+                        </div>
+                      )}
                     </div>
                     {stockQty != null && (
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>

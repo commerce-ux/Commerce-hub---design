@@ -287,6 +287,11 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [preUpsellQuantity, setPreUpsellQuantity] = useState<number | null>(null);
     const [upsellInfo, setUpsellInfo] = useState<UpsellSuggestion | null>(null);
     const [quantityInput, setQuantityInput] = useState<string>(initialValues?.quantity != null ? String(initialValues.quantity) : "");
+
+    // Per-size quantity state (for quantityMode === "per-size" products)
+    const [sizeQuantities, setSizeQuantities] = useState<Record<string, number>>(
+      initialValues?.sizeQuantities ?? {}
+    );
     const [artworkOption, setArtworkOption] = useState<"new" | "customise" | null>(
       initialValues ? (initialValues.artworkType === "upload" ? "new" : "customise") : null
     );
@@ -412,8 +417,22 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
       setPricingGuideSelected(null);
       setAddedAccessories([]);
       setShowAllAccessories(false);
+      setSizeQuantities(initialValues?.sizeQuantities ?? {});
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [product.id]);
+
+    // Sync aggregated total quantity from per-size inputs
+    useEffect(() => {
+      if (product.quantityMode === "per-size") {
+        const total = Object.values(sizeQuantities).reduce((sum, q) => sum + (q || 0), 0);
+        setQuantity(total);
+        setQuantityInput(total > 0 ? String(total) : "");
+        if (total > 0) {
+          setUpsellInfo(computeUpsell(product, total));
+        }
+      }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sizeQuantities, product.quantityMode]);
 
     const handleSubmit = useCallback(() => {
       const item: DraftOrderItem = {
@@ -421,6 +440,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
         product,
         selectedAttributes,
         quantity,
+        ...(product.quantityMode === "per-size" ? { sizeQuantities } : {}),
         artworkType: artworkOption === "new" ? "upload" : artworkOption === "customise" ? "url" : "none",
         artworkUrl: "",
         artworkFileName,
@@ -431,7 +451,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
         accessories: addedAccessories,
       };
       onAddToOrder(item);
-    }, [product, selectedAttributes, quantity, artworkOption, artworkFileName, unitPrice, subtotal, addedAccessories, onAddToOrder, initialValues]);
+    }, [product, selectedAttributes, quantity, sizeQuantities, artworkOption, artworkFileName, unitPrice, subtotal, addedAccessories, onAddToOrder, initialValues]);
 
     useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
@@ -554,7 +574,9 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                     if (attr.type === "color") {
                       return (
                         <div key={attr.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{attr.label}</span>
+                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
+                            {attr.label}<span style={{ color: "var(--cim-fg-critical, #d10023)", marginLeft: "2px" }}>*</span>
+                          </span>
                           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                             {attr.options.map((opt) => {
                               const isSelected = currentVal === opt.id;
@@ -587,7 +609,9 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                     if (attr.type === "radio") {
                       return (
                         <div key={attr.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{attr.label}</span>
+                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
+                            {attr.label}<span style={{ color: "var(--cim-fg-critical, #d10023)", marginLeft: "2px" }}>*</span>
+                          </span>
                           <div style={{ display: "flex", gap: "24px", alignItems: "center" }}>
                             {attr.options.map((opt) => {
                               const isSelected = currentVal === opt.id;
@@ -618,6 +642,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                           label={attr.label}
                           selectedKey={currentVal}
                           onSelectionChange={(val) => handleAttributeChange(attr.id, String(val))}
+                          isRequired
                         >
                           {attr.options.map((opt) => (
                             <SelectItem key={opt.id} id={opt.id}>{opt.label}</SelectItem>
@@ -632,52 +657,140 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
 
             {/* Quantity */}
             <div ref={quantityRef} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxWidth: "378px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+
+              {/* Per-size quantity grid */}
+              {product.quantityMode === "per-size" && product.availableSizes ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
+                    Size and quantity<span style={{ color: "var(--cim-fg-critical, #d10023)", marginLeft: "2px" }}>*</span>
+                  </span>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "8px" }}>
+                    {product.availableSizes.map((size) => {
+                      const qty = sizeQuantities[size] ?? 0;
+                      return (
+                        <div
+                          key={size}
+                          style={{
+                            border: qty > 0
+                              ? "1.5px solid var(--cim-border-accent, #0091b8)"
+                              : "1px solid var(--cim-border-base, #dadcdd)",
+                            borderRadius: "6px",
+                            padding: "8px 6px",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: "4px",
+                            background: qty > 0 ? "var(--cim-bg-info-subtle, #e8f4f8)" : "white",
+                          }}
+                        >
+                          <span style={{
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            color: "var(--cim-fg-subtle, #5f6469)",
+                            userSelect: "none",
+                          }}>
+                            {size}
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={qty === 0 ? "" : qty}
+                            placeholder="0"
+                            onChange={(e) => {
+                              const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                              setSizeQuantities((prev) => ({ ...prev, [size]: val }));
+                            }}
+                            style={{
+                              width: "100%",
+                              textAlign: "center",
+                              border: "none",
+                              outline: "none",
+                              fontSize: "1rem",
+                              fontWeight: 600,
+                              color: "var(--cim-fg-base, #15191d)",
+                              background: "transparent",
+                              padding: 0,
+                              MozAppearance: "textfield",
+                            } as React.CSSProperties}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Total Quantity read-only */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", maxWidth: "180px" }}>
                     <TextField
-                      label="Quantity"
-                      value={quantityInput}
-                      placeholder="Enter quantity"
-                      description={`Between ${product.minOrderQty} – ${product.maxOrderQty}`}
-                      isInvalid={
-                        quantityInput !== "" && (isNaN(parseInt(quantityInput, 10)) || parseInt(quantityInput, 10) < product.minOrderQty || parseInt(quantityInput, 10) > product.maxOrderQty)
-                          ? true
-                          : false
-                      }
-                      error={
-                        quantityInput !== "" && parseInt(quantityInput, 10) < product.minOrderQty
-                          ? `Minimum is ${product.minOrderQty}`
-                          : quantityInput !== "" && parseInt(quantityInput, 10) > product.maxOrderQty
-                          ? `Maximum is ${product.maxOrderQty}`
-                          : undefined
-                      }
-                      onChange={(val) => {
-                        setQuantityInput(val);
-                        const n = parseInt(val, 10);
-                        if (!isNaN(n) && n >= product.minOrderQty && n <= product.maxOrderQty) {
-                          handleQuantityChange(n);
-                        }
-                      }}
-                      onFocus={() => setIsPricingGuideOpen(true)}
-                      inputMode="numeric"
+                      label="Total Quantity"
+                      value={quantity > 0 ? String(quantity) : ""}
+                      placeholder="0"
+                      isReadOnly
+                      isRequired
+                      description={`Minimum ${product.minOrderQty} units`}
+                      isInvalid={quantity > 0 && quantity < product.minOrderQty}
+                      error={quantity > 0 && quantity < product.minOrderQty ? `Minimum is ${product.minOrderQty}` : undefined}
                     />
                   </div>
-                  <div style={{ marginTop: "20px", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", flexShrink: 0 }}>
-                    <IconInfoCircle />
-                  </div>
+                  {product.stockQuantity !== undefined && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ color: "var(--cim-fg-success, #007e3f)", display: "flex" }}>
+                        <IconCheckCircleFill />
+                      </span>
+                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
+                        In stock - {product.stockQuantity}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                {product.stockQuantity !== undefined && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ color: "var(--cim-fg-success, #007e3f)", display: "flex" }}>
-                      <IconCheckCircleFill />
-                    </span>
-                    <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                      In stock - {product.stockQuantity}
-                    </span>
+              ) : (
+                /* Standard single quantity field */
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxWidth: "378px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <TextField
+                        label="Quantity"
+                        value={quantityInput}
+                        placeholder="Enter quantity"
+                        description={`Between ${product.minOrderQty} – ${product.maxOrderQty}`}
+                        isInvalid={
+                          quantityInput !== "" && (isNaN(parseInt(quantityInput, 10)) || parseInt(quantityInput, 10) < product.minOrderQty || parseInt(quantityInput, 10) > product.maxOrderQty)
+                            ? true
+                            : false
+                        }
+                        error={
+                          quantityInput !== "" && parseInt(quantityInput, 10) < product.minOrderQty
+                            ? `Minimum is ${product.minOrderQty}`
+                            : quantityInput !== "" && parseInt(quantityInput, 10) > product.maxOrderQty
+                            ? `Maximum is ${product.maxOrderQty}`
+                            : undefined
+                        }
+                        onChange={(val) => {
+                          setQuantityInput(val);
+                          const n = parseInt(val, 10);
+                          if (!isNaN(n) && n >= product.minOrderQty && n <= product.maxOrderQty) {
+                            handleQuantityChange(n);
+                          }
+                        }}
+                        onFocus={() => setIsPricingGuideOpen(true)}
+                        inputMode="numeric"
+                      />
+                    </div>
+                    <div style={{ marginTop: "20px", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", flexShrink: 0 }}>
+                      <IconInfoCircle />
+                    </div>
                   </div>
-                )}
-              </div>
+                  {product.stockQuantity !== undefined && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ color: "var(--cim-fg-success, #007e3f)", display: "flex" }}>
+                        <IconCheckCircleFill />
+                      </span>
+                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
+                        In stock - {product.stockQuantity}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Pricing guide disclosure */}
               <Disclosure
                 title="View pricing guide"
@@ -979,7 +1092,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
 
               {/* Tax */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                <span>Tax ({taxRate}%)</span>
+                <span>Tax</span>
                 <span>{tax.toFixed(2)} USD</span>
               </div>
 
