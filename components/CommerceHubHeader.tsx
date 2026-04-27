@@ -54,6 +54,8 @@ export function CommerceHubHeader({
     onTenantChange?.(id);
   }
 
+  const bp = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
   const initials = resolvedName
     ? resolvedName
         .split(" ")
@@ -68,7 +70,7 @@ export function CommerceHubHeader({
   return (
     <AppHeader
       title="Commerce hub"
-      titleLink={{ href: "/" }}
+      titleLink={{ href: `${bp}/orders/VP_8WZ3DJ32` }}
       tools={
         <div className="flex items-center gap-1">
           <button
