@@ -952,49 +952,55 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
 
           {/* Extra charges section */}
           {product.extraCharges && product.extraCharges.length > 0 && (
-            <div ref={extraChargesRef} style={sectionCard}>
-              <p style={sectionHeading}>Extra charges</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {product.extraCharges.map((charge) => {
-                  const isSelected = selectedChargeId === charge.id;
-                  return (
-                    <label
-                      key={charge.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "12px",
-                        borderRadius: "6px",
-                        border: isSelected
-                          ? "1.5px solid var(--cim-border-accent, #0091b8)"
-                          : "1px solid var(--cim-border-base, #dadcdd)",
-                        background: isSelected ? "var(--cim-bg-info-subtle, #e8f4f8)" : "white",
-                        cursor: "pointer",
-                        gap: "12px",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <input
-                          type="radio"
-                          name="extraCharge"
-                          value={charge.id}
-                          checked={isSelected}
-                          onChange={() => setSelectedChargeId(isSelected ? null : charge.id)}
-                          onClick={() => { if (isSelected) setSelectedChargeId(null); }}
-                          style={radioInputStyle}
-                        />
-                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                          {charge.label}
+            <div ref={extraChargesRef} style={{ position: "relative", border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", overflow: "hidden" }}>
+              <Disclosure title="Extra charges" variant="subtle">
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", padding: "4px 16px 16px" }}>
+                  {product.extraCharges.map((charge) => {
+                    const isSelected = selectedChargeId === charge.id;
+                    return (
+                      <label
+                        key={charge.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "12px",
+                          borderRadius: "6px",
+                          border: isSelected
+                            ? "1.5px solid var(--cim-border-accent, #0091b8)"
+                            : "1px solid var(--cim-border-base, #dadcdd)",
+                          background: isSelected ? "var(--cim-bg-info-subtle, #e8f4f8)" : "white",
+                          cursor: "pointer",
+                          gap: "12px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <input
+                            type="radio"
+                            name="extraCharge"
+                            value={charge.id}
+                            checked={isSelected}
+                            onChange={() => setSelectedChargeId(isSelected ? null : charge.id)}
+                            onClick={() => { if (isSelected) setSelectedChargeId(null); }}
+                            style={radioInputStyle}
+                          />
+                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
+                            {charge.label}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", whiteSpace: "nowrap" }}>
+                          {charge.unitPrice.toFixed(2)} USD
                         </span>
-                      </div>
-                      <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", whiteSpace: "nowrap" }}>
-                        {charge.unitPrice.toFixed(2)} USD
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </Disclosure>
+              {selectedChargeId && (
+                <div style={{ position: "absolute", right: "12px", top: 0, height: "48px", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                  <Badge tone="base">1 ({(selectedCharge?.unitPrice ?? 0).toFixed(2)} USD)</Badge>
+                </div>
+              )}
             </div>
           )}
 
