@@ -479,7 +479,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
 
     const visibleTabs = TAB_LABELS.filter((tab) => {
       if (tab === "Attributes" && product.attributes.length === 0) return false;
-      if (tab === "Extra charges" && (!product.extraCharges || product.extraCharges.length === 0)) return false;
+      if (tab === "Extra charges") return false;
       return true;
     });
 
@@ -950,8 +950,8 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
             )}
           </div>
 
-          {/* Extra charges section */}
-          {product.extraCharges && product.extraCharges.length > 0 && (
+          {/* Extra charges section — hidden from view */}
+          {false && product.extraCharges && product.extraCharges.length > 0 && (
             <div ref={extraChargesRef} style={{ position: "relative", border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", overflow: "hidden" }}>
               <Disclosure title="Extra charges" variant="subtle">
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", padding: "4px 16px 16px" }}>
