@@ -338,9 +338,20 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     // basePrice is 0 until the user has entered a quantity
     const basePrice = quantityInput ? parseFloat((unitPrice * quantity).toFixed(2)) : 0;
 
-    // Pricing guide
+    // Pricing guide — one row per dropdown quantity option
     const PRICING_GUIDE_VISIBLE = 10;
-    const sortedTiersAll = [...product.pricingTiers].sort((a, b) => a.minQty - b.minQty);
+    const recommendedTier = product.pricingTiers.find((t) => t.recommended);
+    const allGuideRows = (() => {
+      const opts: number[] = [];
+      for (let q = product.minOrderQty; q <= product.maxOrderQty; q += 50) opts.push(q);
+      if (opts[opts.length - 1] !== product.maxOrderQty) opts.push(product.maxOrderQty);
+      return opts.map((q) => ({
+        qty: q,
+        unitPrice: resolvePricingTier(product.pricingTiers, q),
+        recommended: recommendedTier ? q >= recommendedTier.minQty && q <= (recommendedTier.maxQty ?? product.maxOrderQty) : false,
+      }));
+    })();
+    const sortedTiersAll = allGuideRows;
     const pricingGuideRows = showAllTiers ? sortedTiersAll : sortedTiersAll.slice(0, PRICING_GUIDE_VISIBLE);
     const selectedCharge = (product.extraCharges ?? []).find((c) => c.id === selectedChargeId);
     // Artwork charge only applies once the user has selected an artwork option
@@ -514,11 +525,19 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
         <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
 
           {/* Product info row */}
+          {(() => {
+            const colorAttr = product.attributes.find((a) => a.type === "color");
+            const selectedColorId = colorAttr
+              ? selectedAttributes.find((a) => a.attributeId === colorAttr.id)?.selectedOptionId
+              : undefined;
+            const selectedColorOption = colorAttr?.options.find((o) => o.id === selectedColorId);
+            const displayImageUrl = selectedColorOption?.imageUrl ?? product.imageUrl;
+            return (
           <div style={{ display: "flex", gap: "16px", alignItems: "flex-start", padding: "4px 0 12px" }}>
             <div style={{ width: "60px", height: "60px", borderRadius: "6px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0 }}>
-              {product.imageUrl ? (
+              {displayImageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={product.imageUrl} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img src={displayImageUrl} alt={selectedColorOption?.label ?? product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               ) : (
                 <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -536,6 +555,8 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
               <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", whiteSpace: "nowrap", flexShrink: 0 }}>{product.id}</span>
             </div>
           </div>
+            );
+          })()}
 
           {/* Combined Attributes + Quantity section */}
           <div ref={attributesRef} style={{ ...sectionCard, border: "none", padding: "0" }}>
@@ -746,36 +767,26 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxWidth: "378px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <TextField
+                      <Select
                         label="Quantity"
-                        value={quantityInput}
-                        placeholder="Enter quantity"
-                        description={`Between ${product.minOrderQty} – ${product.maxOrderQty}`}
-                        isInvalid={
-                          quantityInput !== "" && (isNaN(parseInt(quantityInput, 10)) || parseInt(quantityInput, 10) < product.minOrderQty || parseInt(quantityInput, 10) > product.maxOrderQty)
-                            ? true
-                            : false
-                        }
-                        error={
-                          quantityInput !== "" && parseInt(quantityInput, 10) < product.minOrderQty
-                            ? `Minimum is ${product.minOrderQty}`
-                            : quantityInput !== "" && parseInt(quantityInput, 10) > product.maxOrderQty
-                            ? `Maximum is ${product.maxOrderQty}`
-                            : undefined
-                        }
-                        onChange={(val) => {
-                          setQuantityInput(val);
-                          const n = parseInt(val, 10);
-                          if (!isNaN(n) && n >= product.minOrderQty && n <= product.maxOrderQty) {
-                            handleQuantityChange(n);
-                          }
+                        selectedKey={quantityInput || null}
+                        onOpenChange={(isOpen) => { if (isOpen) setIsPricingGuideOpen(true); }}
+                        onSelectionChange={(val) => {
+                          const n = Number(val);
+                          setQuantityInput(n > 0 ? String(n) : "");
+                          if (n > 0) handleQuantityChange(n);
                         }}
-                        onFocus={() => setIsPricingGuideOpen(true)}
-                        inputMode="numeric"
-                      />
-                    </div>
-                    <div style={{ marginTop: "20px", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", flexShrink: 0 }}>
-                      <IconInfoCircle />
+                        description={`Between ${product.minOrderQty} – ${product.maxOrderQty}`}
+                      >
+                        {(() => {
+                          const opts: number[] = [];
+                          for (let q = product.minOrderQty; q <= product.maxOrderQty; q += 50) opts.push(q);
+                          if (opts[opts.length - 1] !== product.maxOrderQty) opts.push(product.maxOrderQty);
+                          return opts.map((q) => (
+                            <SelectItem key={String(q)} id={String(q)}>{q}</SelectItem>
+                          ));
+                        })()}
+                      </Select>
                     </div>
                   </div>
                   {product.stockQuantity !== undefined && (
@@ -799,16 +810,16 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                 onExpandedChange={setIsPricingGuideOpen}
               >
                   <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    {pricingGuideRows.map((tier) => {
-                      const isSelected = pricingGuideSelected === tier.minQty;
-                      const tierTotal = (tier.minQty * tier.unitPrice).toFixed(2);
+                    {pricingGuideRows.map((row) => {
+                      const isSelected = pricingGuideSelected === row.qty;
+                      const rowTotal = (row.qty * row.unitPrice).toFixed(2);
                       return (
                         <button
-                          key={tier.minQty}
+                          key={row.qty}
                           onClick={() => {
-                            setPricingGuideSelected(tier.minQty);
-                            setQuantityInput(String(tier.minQty));
-                            handleQuantityChange(tier.minQty);
+                            setPricingGuideSelected(row.qty);
+                            setQuantityInput(String(row.qty));
+                            handleQuantityChange(row.qty);
                           }}
                           style={{
                             display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -824,17 +835,17 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                         >
                           {/* Left: qty + badge */}
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{tier.minQty}</span>
-                            {tier.recommended && <Badge tone="base">Recommended</Badge>}
+                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{row.qty}</span>
+                            {row.recommended && <Badge tone="base">Recommended</Badge>}
                           </div>
 
                           {/* Right: total + unit price */}
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                             <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
-                              {tierTotal} USD
+                              {rowTotal} USD
                             </span>
                             <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                              {tier.unitPrice.toFixed(2)} USD / unit
+                              {row.unitPrice.toFixed(2)} USD / unit
                             </span>
                           </div>
                         </button>
@@ -939,6 +950,54 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
             )}
           </div>
 
+          {/* Extra charges section */}
+          {product.extraCharges && product.extraCharges.length > 0 && (
+            <div ref={extraChargesRef} style={sectionCard}>
+              <p style={sectionHeading}>Extra charges</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {product.extraCharges.map((charge) => {
+                  const isSelected = selectedChargeId === charge.id;
+                  return (
+                    <label
+                      key={charge.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "12px",
+                        borderRadius: "6px",
+                        border: isSelected
+                          ? "1.5px solid var(--cim-border-accent, #0091b8)"
+                          : "1px solid var(--cim-border-base, #dadcdd)",
+                        background: isSelected ? "var(--cim-bg-info-subtle, #e8f4f8)" : "white",
+                        cursor: "pointer",
+                        gap: "12px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <input
+                          type="radio"
+                          name="extraCharge"
+                          value={charge.id}
+                          checked={isSelected}
+                          onChange={() => setSelectedChargeId(isSelected ? null : charge.id)}
+                          onClick={() => { if (isSelected) setSelectedChargeId(null); }}
+                          style={radioInputStyle}
+                        />
+                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
+                          {charge.label}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", whiteSpace: "nowrap" }}>
+                        {charge.unitPrice.toFixed(2)} USD
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Add-ons section */}
           {(() => {
             const addedCount = addedAccessories.length;
@@ -956,6 +1015,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                             key={acc.id}
                             item={acc}
                             isAdded={isAdded}
+                            mainItemQty={quantity}
                             onAdd={(added) => setAddedAccessories((prev) => [...prev, added])}
                             onRemove={() => setAddedAccessories((prev) => prev.filter((a) => a.id !== acc.id))}
                           />
