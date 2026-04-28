@@ -70,7 +70,7 @@ export function CommerceHubHeader({
   return (
     <AppHeader
       title="Commerce hub"
-      titleLink={{ href: `${bp}/orders/VP_8WZ3DJ32` }}
+      titleLink={{ href: `${bp}/` }}
       tools={
         <div className="flex items-center gap-1">
           <button
