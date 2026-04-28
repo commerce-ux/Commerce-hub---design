@@ -2,8 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Select, SelectItem, SearchField } from "@cimpress-ui/react";
-import { IconChevronDown, IconArrowLeft } from "@cimpress-ui/react/icons";
+import {
+  Button, Select, SelectItem, SearchField, Text, IconButton,
+  Table, TableBody, TableBodyCell, TableBodyRow,
+  TableContainer, TableHeader, TableHeaderCell, TableHeaderRow,
+} from "@cimpress-ui/react";
+import {
+  IconChevronDown, IconArrowLeft, IconAddCircle, IconMenuMoreVertical,
+} from "@cimpress-ui/react/icons";
 import type { Key } from "@cimpress-ui/react";
 import { CUSTOMER_DATABASE } from "@/lib/createOrderMockData";
 import type { Customer } from "@/lib/createOrderMockData";
@@ -63,15 +69,6 @@ function WarningCircleIcon() {
   );
 }
 
-function CreateOrderIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5"/>
-      <path d="M12 8v8M8 12h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  );
-}
-
 function SortIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ display: "inline", marginLeft: "4px", verticalAlign: "middle" }}>
@@ -97,34 +94,20 @@ function CancelIcon() {
   );
 }
 
-// ── Table styles ───────────────────────────────────────────────────────────────
-const thStyle: React.CSSProperties = {
-  padding: "0 12px",
-  height: "40px",
-  background: "var(--cim-bg-subtle, #f8f9fa)",
-  fontSize: "0.875rem",
-  fontWeight: 600,
-  color: "var(--cim-fg-base, #15191d)",
-  textAlign: "left",
-  borderBottom: "1px solid var(--cim-border-base, #dadcdd)",
-  whiteSpace: "nowrap",
-};
+// TableBodyRow doesn't expose onClick in its props type — cast to allow it
+const ClickableTableBodyRow = TableBodyRow as React.ComponentType<
+  React.ComponentProps<typeof TableBodyRow> & { onClick?: () => void; style?: React.CSSProperties }
+>;
 
-const tdStyle: React.CSSProperties = {
-  padding: "0 12px",
-  height: "40px",
-  fontSize: "0.875rem",
-  color: "var(--cim-fg-base, #15191d)",
-  borderBottom: "1px solid var(--cim-border-base, #dadcdd)",
-  whiteSpace: "nowrap",
+// ── Orders table styles (kept for the order detail table only) ─────────────────
+const orderTh: React.CSSProperties = {
+  padding: "0 12px", height: "40px", background: "var(--cim-bg-subtle, #f8f9fa)",
+  fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)",
+  textAlign: "left", borderBottom: "1px solid var(--cim-border-base, #dadcdd)", whiteSpace: "nowrap",
 };
-
-const tableStyle: React.CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  border: "1px solid var(--cim-border-subtle, #eaebeb)",
-  borderRadius: "4px",
-  overflow: "hidden",
+const orderTd: React.CSSProperties = {
+  padding: "0 12px", height: "40px", fontSize: "0.875rem",
+  color: "var(--cim-fg-base, #15191d)", borderBottom: "1px solid var(--cim-border-base, #dadcdd)", whiteSpace: "nowrap",
 };
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -250,9 +233,7 @@ export function SearchView({ onCustomerSelect }: SearchViewProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       {/* Page title */}
-      <h1 className="font-semibold" style={{ fontSize: "1.5rem", lineHeight: "2rem", margin: 0, color: "var(--cim-fg-base, #15191d)" }}>
-        Find order or customer
-      </h1>
+      <Text as="h1" variant="title-4">Find order or customer</Text>
 
       {/* Search card */}
       <div style={{ background: "white", border: "1px solid var(--cim-border-subtle, #eaebeb)", borderRadius: "6px", boxShadow: "0px 1px 2px rgba(0,0,0,0.08), 0px 2px 4px rgba(0,0,0,0.06), 0px 4px 8px rgba(0,0,0,0.04)", padding: "16px", display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -360,59 +341,56 @@ export function SearchView({ onCustomerSelect }: SearchViewProps) {
 
       {/* ── Customer list ── */}
       {view === "customers" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <p className="font-semibold" style={{ fontSize: "1rem", lineHeight: "1.5rem", color: "var(--cim-fg-base)", margin: 0 }}>
             {customers.length} Search Result{customers.length !== 1 ? "s" : ""}
           </p>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Name</th>
-                <th style={thStyle}>Email ID</th>
-                <th style={thStyle}>Customer ID</th>
-                <th style={{ ...thStyle, width: "80px" }}>Orders</th>
-                <th style={{ ...thStyle, width: "80px" }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((c, i) => (
-                <tr
-                  key={c.id}
-                  onClick={() => handleSelectCustomer(c)}
-                  style={{ background: i % 2 === 1 ? "var(--cim-bg-subtle, #f8f9fa)" : "white", cursor: "pointer" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cim-bg-hover, #eef6fa)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = i % 2 === 1 ? "var(--cim-bg-subtle, #f8f9fa)" : "white")}
-                >
-                  <td style={tdStyle}>{c.name}</td>
-                  <td style={tdStyle}>{c.email}</td>
-                  <td style={tdStyle}>{c.id}</td>
-                  <td style={{ ...tdStyle, width: "80px" }}>{c.orderCount}</td>
-                  <td style={{ ...tdStyle, width: "80px" }} onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display: "flex", gap: "4px", alignItems: "center", justifyContent: "flex-end" }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/customers/${c.id}/create-order`);
-                        }}
-                        title="Create order"
-                        aria-label={`Create order for ${c.name}`}
-                        style={{
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          width: "28px", height: "28px", border: "none", background: "none",
-                          cursor: "pointer", borderRadius: "4px",
-                          color: "var(--cim-fg-accent, #0e7490)",
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cim-bg-hover, #eef6fa)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                      >
-                        <CreateOrderIcon />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <TableContainer>
+            <Table aria-label="Customer search results">
+              <TableHeader>
+                <TableHeaderRow>
+                  <TableHeaderCell columnKey="name">Name</TableHeaderCell>
+                  <TableHeaderCell columnKey="email">Email ID</TableHeaderCell>
+                  <TableHeaderCell columnKey="id">Customer ID</TableHeaderCell>
+                  <TableHeaderCell columnKey="orders" columnContentAlignment="end">Orders</TableHeaderCell>
+                  <TableHeaderCell columnKey="actions" columnContentAlignment="end">{""}</TableHeaderCell>
+                </TableHeaderRow>
+              </TableHeader>
+              <TableBody>
+                {customers.map((c) => (
+                  <ClickableTableBodyRow key={c.id} onClick={() => handleSelectCustomer(c)} style={{ cursor: "pointer" }}>
+                    <TableBodyCell columnKey="name">{c.name}</TableBodyCell>
+                    <TableBodyCell columnKey="email">{c.email}</TableBodyCell>
+                    <TableBodyCell columnKey="id">
+                      <span style={{ color: "var(--cim-fg-subtle)", fontFamily: "monospace", fontSize: "0.8125rem" }}>
+                        {c.id}
+                      </span>
+                    </TableBodyCell>
+                    <TableBodyCell columnKey="orders">
+                      <div style={{ textAlign: "right" }}>{c.orderCount}</div>
+                    </TableBodyCell>
+                    <TableBodyCell columnKey="actions">
+                      <div style={{ display: "flex", gap: "4px", alignItems: "center", justifyContent: "flex-end" }}>
+                        <IconButton
+                          aria-label={`Create order for ${c.name}`}
+                          icon={<IconAddCircle />}
+                          variant="tertiary"
+                          size="medium"
+                          onPress={() => router.push(`/customers/${c.id}/create-order`)}
+                        />
+                        <IconButton
+                          aria-label={`More options for ${c.name}`}
+                          icon={<IconMenuMoreVertical />}
+                          variant="tertiary"
+                          size="medium"
+                        />
+                      </div>
+                    </TableBodyCell>
+                  </ClickableTableBodyRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </div>
       )}
 
@@ -441,15 +419,15 @@ export function SearchView({ onCustomerSelect }: SearchViewProps) {
           )}
 
           {/* Orders table */}
-          <table style={tableStyle}>
+          <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid var(--cim-border-subtle, #eaebeb)", borderRadius: "4px", overflow: "hidden" }}>
             <thead>
               <tr>
-                <th style={thStyle}>Order ID</th>
-                <th style={thStyle}>Created on <SortIcon /></th>
-                <th style={thStyle}>Estimated arrival <SortIcon /></th>
-                <th style={thStyle}>Shipping costs</th>
-                <th style={thStyle}>Order total <SortIcon /></th>
-                <th style={{ ...thStyle, width: "80px" }}></th>
+                <th style={orderTh}>Order ID</th>
+                <th style={orderTh}>Created on <SortIcon /></th>
+                <th style={orderTh}>Estimated arrival <SortIcon /></th>
+                <th style={orderTh}>Shipping costs</th>
+                <th style={orderTh}>Order total <SortIcon /></th>
+                <th style={{ ...orderTh, width: "80px" }}></th>
               </tr>
             </thead>
             <tbody>
@@ -461,37 +439,15 @@ export function SearchView({ onCustomerSelect }: SearchViewProps) {
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cim-bg-hover, #eef6fa)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = i % 2 === 1 ? "var(--cim-bg-subtle, #f8f9fa)" : "white")}
                 >
-                  <td style={tdStyle}>{selectedCustomer.orderIds[i]}</td>
-                  <td style={tdStyle}>
-                    {order.createdOn}&nbsp;
-                    <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle)" }}>{order.timezone}</span>
-                  </td>
-                  <td style={tdStyle}>{order.estimatedArrival}</td>
-                  <td style={tdStyle}>{order.shippingCost}</td>
-                  <td style={tdStyle}>
-                    {order.orderTotal}&nbsp;
-                    <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle)" }}>{order.tax}</span>
-                  </td>
-                  <td style={{ ...tdStyle, width: "80px" }}>
+                  <td style={orderTd}>{selectedCustomer.orderIds[i]}</td>
+                  <td style={orderTd}>{order.createdOn}&nbsp;<span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle)" }}>{order.timezone}</span></td>
+                  <td style={orderTd}>{order.estimatedArrival}</td>
+                  <td style={orderTd}>{order.shippingCost}</td>
+                  <td style={orderTd}>{order.orderTotal}&nbsp;<span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle)" }}>{order.tax}</span></td>
+                  <td style={{ ...orderTd, width: "80px" }}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                      <button
-                        onClick={(e) => handleReplaceOrder(selectedCustomer.orderIds[i], e)}
-                        title="Replace order"
-                        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", border: "none", background: "none", cursor: "pointer", borderRadius: "4px", color: "var(--cim-fg-subtle)" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cim-bg-subtle)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                      >
-                        <ReplaceIcon />
-                      </button>
-                      <button
-                        onClick={(e) => handleCancelOrder(selectedCustomer.orderIds[i], e)}
-                        title="Cancel order"
-                        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", border: "none", background: "none", cursor: "pointer", borderRadius: "4px", color: "var(--cim-fg-subtle)" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cim-bg-subtle)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                      >
-                        <CancelIcon />
-                      </button>
+                      <button onClick={(e) => handleReplaceOrder(selectedCustomer.orderIds[i], e)} title="Replace order" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", border: "none", background: "none", cursor: "pointer", borderRadius: "4px", color: "var(--cim-fg-subtle)" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cim-bg-subtle)")} onMouseLeave={(e) => (e.currentTarget.style.background = "none")}><ReplaceIcon /></button>
+                      <button onClick={(e) => handleCancelOrder(selectedCustomer.orderIds[i], e)} title="Cancel order" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", border: "none", background: "none", cursor: "pointer", borderRadius: "4px", color: "var(--cim-fg-subtle)" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cim-bg-subtle)")} onMouseLeave={(e) => (e.currentTarget.style.background = "none")}><CancelIcon /></button>
                     </div>
                   </td>
                 </tr>
