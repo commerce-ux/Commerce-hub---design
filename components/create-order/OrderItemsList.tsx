@@ -13,6 +13,7 @@ import {
   IconInfoCircle,
 } from "@cimpress-ui/react/icons";
 import type { DraftOrderItem } from "@/lib/types";
+import { generateGuideQuantities } from "@/lib/pricingUtils";
 import { Toast } from "@/components/Toast";
 
 interface OrderItemsListProps {
@@ -561,15 +562,9 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                                   description={`Qty has to be between ${item.product.minOrderQty} - ${item.product.maxOrderQty}`}
                                   isDisabled={!onQuantityChange}
                                 >
-                                  {(() => {
-                                    const step = 500;
-                                    const opts = new Set<number>([item.product.minOrderQty, item.product.maxOrderQty]);
-                                    const first = Math.ceil(item.product.minOrderQty / step) * step;
-                                    for (let q = first; q <= item.product.maxOrderQty; q += step) opts.add(q);
-                                    return [...opts].sort((a, b) => a - b).map((q) => (
+                                  {generateGuideQuantities(item.product.pricingTiers, item.product.minOrderQty, item.product.maxOrderQty).map((q) => (
                                       <SelectItem key={String(q)} id={String(q)}>{q}</SelectItem>
-                                    ));
-                                  })()}
+                                    ))}
                                 </Select>
                               </div>
                               <button

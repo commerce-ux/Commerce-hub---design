@@ -4,6 +4,7 @@ import { useState, useEffect, forwardRef, useImperativeHandle, useRef, useCallba
 import { Button, Select, SelectItem, TextField, Disclosure, Badge, Tooltip } from "@cimpress-ui/react";
 import { IconInfoCircle, IconCheckCircleFill, IconChevronRight } from "@cimpress-ui/react/icons";
 import type { ProductCatalogItem, DraftOrderItem, DraftOrderItemAttribute, QuantityPricingTier } from "@/lib/types";
+import { resolvePricingTier as resolveTier, computeIncrementRanges, generateGuideQuantities } from "@/lib/pricingUtils";
 import { PreviousArtworkModal } from "./PreviousArtworkModal";
 import { AccessoryCard, MOCK_ACCESSORIES } from "./AddAccessoryModal";
 
@@ -54,12 +55,7 @@ interface UpsellSuggestion {
   additionalCost: number;
 }
 
-function resolvePricingTier(tiers: QuantityPricingTier[], qty: number): number {
-  for (const tier of [...tiers].reverse()) {
-    if (qty >= tier.minQty) return tier.unitPrice;
-  }
-  return tiers[0]?.unitPrice ?? 0;
-}
+const resolvePricingTier = resolveTier;
 
 function generateDraftId(): string {
   return Math.random().toString(36).substring(2, 11);
@@ -78,22 +74,6 @@ function generateQuantityOptions(min: number, max: number, tiers: QuantityPricin
   return [...opts].filter((q) => q >= min && q <= max).sort((a, b) => a - b);
 }
 
-/** Computes the step size to use within each pricing tier range. */
-function computeIncrementRanges(
-  tiers: QuantityPricingTier[],
-  minQty: number,
-  maxQty: number
-): { from: number; to: number; step: number; unitPrice: number }[] {
-  const sorted = [...tiers].sort((a, b) => a.minQty - b.minQty);
-  return sorted.map((tier, i) => {
-    const from = Math.max(tier.minQty, minQty);
-    const to = i + 1 < sorted.length ? sorted[i + 1].minQty : maxQty;
-    const width = to - from;
-    // Small ranges get a 50-unit step; larger ranges get 100
-    const step = width <= 100 ? 50 : 100;
-    return { from, to, step, unitPrice: tier.unitPrice };
-  });
-}
 
 function getContextualTiers(
   tiers: QuantityPricingTier[],
@@ -584,6 +564,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const visibleTabs = TAB_LABELS.filter((tab) => {
       if (tab === "Attributes" && product.attributes.length === 0) return false;
       if (tab === "Extra charges") return false;
+      if (tab === "Add-ons" && product.category === "Apparel") return false;
       return true;
     });
 
@@ -1240,8 +1221,8 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
             </div>
           )}
 
-          {/* Add-ons section */}
-          {(() => {
+          {/* Add-ons section — hidden for Apparel products */}
+          {product.category !== "Apparel" && (() => {
             const addedCount = addedAccessories.length;
             const addedTotal = addedAccessories.reduce((sum, a) => sum + a.quantity * a.unitPrice, 0);
             const visibleAccessories = showAllAccessories ? MOCK_ACCESSORIES : MOCK_ACCESSORIES.slice(0, 3);
@@ -1300,6 +1281,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
           })()}
 
           {/* Item price section */}
+
           <div ref={itemPriceRef} style={{
             background: "white",
             border: "1px solid var(--cim-border-base, #dadcdd)",
