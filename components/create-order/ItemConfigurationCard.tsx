@@ -870,9 +870,14 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                         }}
                         description={`Quantity has to be between ${product.minOrderQty} - ${product.maxOrderQty}`}
                       >
-                        {allGuideRows.map((row) => (
-                          <SelectItem key={String(row.qty)} id={String(row.qty)}>{row.qty}</SelectItem>
-                        ))}
+                        {allGuideRows.map((row) => {
+                          const outOfStock = effectiveStock !== undefined && row.qty > effectiveStock;
+                          return (
+                            <SelectItem key={String(row.qty)} id={String(row.qty)} isDisabled={outOfStock}>
+                              {row.qty}{outOfStock ? " (out of stock)" : ""}
+                            </SelectItem>
+                          );
+                        })}
                       </Select>
                     </div>
                     <div style={{ position: "relative", marginTop: "20px", flexShrink: 0 }}>
@@ -961,7 +966,9 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                   >
                     {sortedTiersAll.map((row) => {
                       const isSelected = pricingGuideSelected === row.qty;
+                      const outOfStock = effectiveStock !== undefined && row.qty > effectiveStock;
                       const rowTotal = (row.qty * row.unitPrice).toFixed(2);
+                      const fgColor = outOfStock ? "var(--cim-fg-muted, #94979b)" : "var(--cim-fg-base, #15191d)";
                       return (
                         <button
                           key={row.qty}
@@ -969,7 +976,9 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                             if (el) pricingGuideRowRefs.current.set(row.qty, el);
                             else pricingGuideRowRefs.current.delete(row.qty);
                           }}
+                          disabled={outOfStock}
                           onClick={() => {
+                            if (outOfStock) return;
                             setPricingGuideSelected(row.qty);
                             setQuantityInput(String(row.qty));
                             handleQuantityChange(row.qty);
@@ -977,12 +986,13 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                           style={{
                             display: "flex", alignItems: "center",
                             width: "100%", minHeight: "40px",
-                            background: "white",
+                            background: outOfStock ? "var(--cim-bg-subtle, #f8f9fa)" : "white",
                             border: "none",
                             borderBottom: "1px solid var(--cim-border-base, #dadcdd)",
-                            cursor: "pointer",
+                            cursor: outOfStock ? "not-allowed" : "pointer",
                             padding: 0,
                             textAlign: "left",
+                            opacity: outOfStock ? 0.6 : 1,
                           }}
                         >
                           {/* Radio */}
@@ -996,30 +1006,33 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                               borderRadius: "999px",
                               border: isSelected
                                 ? "5px solid var(--cim-fg-base, #15191d)"
-                                : "1px solid var(--cim-fg-base, #15191d)",
+                                : `1px solid ${outOfStock ? "var(--cim-fg-muted, #94979b)" : "var(--cim-fg-base, #15191d)"}`,
                               background: "white",
                               boxSizing: "border-box",
                               flexShrink: 0,
                             }} />
                           </div>
                           {/* Qty */}
-                          <div style={{ flex: 1, padding: "0 12px", minWidth: 0 }}>
-                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "20px" }}>
+                          <div style={{ flex: 1, padding: "0 12px", minWidth: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ fontSize: "0.875rem", color: fgColor, lineHeight: "20px" }}>
                               {row.qty}
                             </span>
-                            {row.recommended && (
-                              <span style={{ marginLeft: "8px" }}><Badge tone="base">Recommended</Badge></span>
+                            {row.recommended && !outOfStock && (
+                              <Badge tone="base">Recommended</Badge>
+                            )}
+                            {outOfStock && (
+                              <Badge tone="critical">Out of stock</Badge>
                             )}
                           </div>
                           {/* Total price */}
                           <div style={{ padding: "0 12px", flexShrink: 0 }}>
-                            <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", whiteSpace: "nowrap", lineHeight: "20px" }}>
+                            <span style={{ fontSize: "0.875rem", fontWeight: 600, color: fgColor, whiteSpace: "nowrap", lineHeight: "20px" }}>
                               {rowTotal} USD
                             </span>
                           </div>
                           {/* Unit price */}
                           <div style={{ padding: "0 12px", flexShrink: 0 }}>
-                            <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)", whiteSpace: "nowrap", lineHeight: "16px" }}>
+                            <span style={{ fontSize: "0.75rem", color: outOfStock ? "var(--cim-fg-muted, #94979b)" : "var(--cim-fg-subtle, #5f6469)", whiteSpace: "nowrap", lineHeight: "16px" }}>
                               {row.unitPrice.toFixed(2)} / unit
                             </span>
                           </div>
