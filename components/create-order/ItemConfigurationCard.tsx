@@ -635,7 +635,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
               ? selectedAttributes.find((a) => a.attributeId === colorAttr.id)?.selectedOptionId
               : undefined;
             const selectedColorOption = colorAttr?.options.find((o) => o.id === selectedColorId);
-            const displayImageUrl = selectedColorOption?.imageUrl ?? product.imageUrl;
+            const displayImageUrl = product.imageUrl;
             return (
           <div style={{ display: "flex", gap: "16px", alignItems: "flex-start", padding: "4px 0 12px" }}>
             <div style={{ width: "60px", height: "60px", borderRadius: "6px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0 }}>
