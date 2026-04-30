@@ -194,7 +194,7 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <Text as="span" variant="medium">{customer.name} ({customer.email})</Text>
               <div style={{ width: "1px", height: "16px", background: "var(--cim-border-subtle, #eaebeb)", flexShrink: 0 }} />
-              <Text as="span" variant="medium">Shopper ID: <CopyInline variant="body">{customer.shopperId}</CopyInline></Text>
+              <Text as="span" variant="medium">Shopper ID: <CopyInline>{customer.shopperId}</CopyInline></Text>
               {selectedStore && (
                 <>
                   <div style={{ width: "1px", height: "16px", background: "var(--cim-border-subtle, #eaebeb)", flexShrink: 0 }} />
@@ -202,7 +202,7 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
                     Store: {selectedStore}
                     <button
                       onClick={() => setIsStoreModalOpen(true)}
-                      style={{ marginLeft: "6px", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
+                      style={{ marginLeft: "6px", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "inherit", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
                     >
                       Change
                     </button>
