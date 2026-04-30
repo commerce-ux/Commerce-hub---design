@@ -562,9 +562,14 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                                   description={`Qty has to be between ${item.product.minOrderQty} - ${item.product.maxOrderQty}`}
                                   isDisabled={!onQuantityChange}
                                 >
-                                  {generateGuideQuantities(item.product.pricingTiers, item.product.minOrderQty, item.product.maxOrderQty).map((q) => (
-                                      <SelectItem key={String(q)} id={String(q)}>{q}</SelectItem>
-                                    ))}
+                                  {generateGuideQuantities(item.product.pricingTiers, item.product.minOrderQty, item.product.maxOrderQty).map((q) => {
+                                      const overStock = stockQty != null && q > stockQty;
+                                      return (
+                                        <SelectItem key={String(q)} id={String(q)} isDisabled={overStock}>
+                                          {q}{overStock ? " (out of stock)" : ""}
+                                        </SelectItem>
+                                      );
+                                    })}
                                 </Select>
                               </div>
                               <button
