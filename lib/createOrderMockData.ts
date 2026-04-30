@@ -1,5 +1,20 @@
 import type { ProductCatalogItem, SavedAddress, ShippingMethod } from "./types";
 
+/** Real jacket photo URLs keyed by hex color (prototype use). */
+const JACKET_IMAGES: Record<string, string> = {
+  "#58595B": "https://images.unsplash.com/photo-1548126032-079a0fb0099d?w=600&h=600&fit=crop", // Graphite
+  "#231F20": "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=600&h=600&fit=crop", // True Black
+  "#003087": "https://images.unsplash.com/photo-1544441893-675973e31985?w=600&h=600&fit=crop", // Insignia Blue
+  "#CC2529": "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=600&h=600&fit=crop", // Signal Red
+  "#78BE20": "https://images.unsplash.com/photo-1548126032-079a0fb0099d?w=600&h=600&fit=crop", // Bright Lime
+  "#C4622D": "https://images.unsplash.com/photo-1548126032-079a0fb0099d?w=600&h=600&fit=crop", // Terra Cotta
+  "#7CBCE1": "https://images.unsplash.com/photo-1544441893-675973e31985?w=600&h=600&fit=crop", // Glacier Blue
+  "#66676B": "https://images.unsplash.com/photo-1548126032-079a0fb0099d?w=600&h=600&fit=crop", // Dark Pewter
+};
+function jacketDataUri(hexColor: string): string {
+  return JACKET_IMAGES[hexColor] ?? "https://images.unsplash.com/photo-1548126032-079a0fb0099d?w=600&h=600&fit=crop";
+}
+
 // ─── Customer Database (moved from SearchView.tsx for server-component access) ─
 export interface Customer {
   id: string;
@@ -555,10 +570,12 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     id: "PRD-ZQO1BK4YA",
     name: "Port Authority® Women's Brick Jacket",
     category: "Apparel",
-    imageUrl: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=64&h=64&fit=crop",
+    description: "Clothing material",
+    imageUrl: "https://images.unsplash.com/photo-1548126032-079a0fb0099d?w=600&h=600&fit=crop", // Graphite — default image
     baseUnitPrice: 1.46,
     quantityMode: "per-size",
-    availableSizes: ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL"],
+    availableSizes: ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL"],
+    stockBySize: { XS: 140, XXL: 194, "3XL": 80, "4XL": 28 },
     pricingTiers: [
       { minQty: 50, maxQty: 99, unitPrice: 1.59 },
       { minQty: 100, maxQty: 149, unitPrice: 1.53 },
@@ -572,12 +589,54 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
         label: "Select color",
         type: "color",
         options: [
-          { id: "brick", label: "Brick", hexColor: "#8B3A3A" },
-          { id: "black", label: "Black", hexColor: "#15191d" },
-          { id: "navy", label: "Navy Blue", hexColor: "#1e3a5f" },
-          { id: "forest", label: "Forest Green", hexColor: "#2d6a4f" },
-          { id: "grey", label: "Steel Grey", hexColor: "#6b7280" },
-          { id: "burgundy", label: "Burgundy", hexColor: "#9b1c1c" },
+          {
+            id: "graphite",
+            label: "Graphite",
+            hexColor: "#58595B",
+            imageUrl: jacketDataUri("#58595B"),
+          },
+          {
+            id: "true_black",
+            label: "True Black",
+            hexColor: "#231F20",
+            imageUrl: jacketDataUri("#231F20"),
+          },
+          {
+            id: "insignia_blue",
+            label: "Insignia Blue",
+            hexColor: "#003087",
+            imageUrl: jacketDataUri("#003087"),
+          },
+          {
+            id: "signal_red",
+            label: "Signal Red",
+            hexColor: "#CC2529",
+            imageUrl: jacketDataUri("#CC2529"),
+          },
+          {
+            id: "bright_lime",
+            label: "Bright Lime",
+            hexColor: "#78BE20",
+            imageUrl: jacketDataUri("#78BE20"),
+          },
+          {
+            id: "terra_cotta",
+            label: "Terra Cotta",
+            hexColor: "#C4622D",
+            imageUrl: jacketDataUri("#C4622D"),
+          },
+          {
+            id: "glacier_blue",
+            label: "Glacier Blue",
+            hexColor: "#7CBCE1",
+            imageUrl: jacketDataUri("#7CBCE1"),
+          },
+          {
+            id: "dark_pewter",
+            label: "Dark Pewter",
+            hexColor: "#66676B",
+            imageUrl: jacketDataUri("#66676B"),
+          },
         ],
       },
     ],
@@ -596,8 +655,10 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
       { minQty: 50, maxQty: 99, unitPrice: 1.59 },
       { minQty: 100, maxQty: 149, unitPrice: 1.53 },
       { minQty: 150, maxQty: 249, unitPrice: 1.46, recommended: true },
-      { minQty: 250, maxQty: 299, unitPrice: 1.38 },
-      { minQty: 300, maxQty: 350, unitPrice: 1.33 },
+      { minQty: 250, maxQty: 499, unitPrice: 1.38 },
+      { minQty: 500, maxQty: 999, unitPrice: 1.33 },
+      { minQty: 1000, maxQty: 4999, unitPrice: 1.25 },
+      { minQty: 5000, maxQty: 10000, unitPrice: 1.18 },
     ],
     attributes: [
       {
@@ -624,8 +685,8 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
       },
     ],
     minOrderQty: 50,
-    maxOrderQty: 350,
-    stockQuantity: 250,
+    maxOrderQty: 1000,
+    stockQuantity: 5000,
     extraCharges: [
       { id: "logo_change", label: "Logo Change", unitPrice: 10 },
       { id: "setup_change", label: "Setup Change", unitPrice: 10 },

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Checkbox, Button, Disclosure, AlertDialog, AlertDialogBody, AlertDialogActions,
-  TextField,
+  TextField, Select, SelectItem, ModalDialog, ModalDialogBody,
 } from "@cimpress-ui/react";
 import {
   IconTrash,
@@ -21,6 +21,7 @@ interface OrderItemsListProps {
   onRemove: (draftItemId: string) => void;
   onDuplicate: (draftItemId: string) => void;
   onQuantityChange?: (draftItemId: string, newQty: number) => void;
+  onSizeQuantityChange?: (draftItemId: string, size: string, newQty: number) => void;
   onAccessoryRemove?: (draftItemId: string, accessoryId: string) => void;
 }
 
@@ -35,13 +36,16 @@ const iconBtnStyle: React.CSSProperties = {
   borderRadius: "4px",
   cursor: "pointer",
   color: "var(--cim-fg-subtle, #5f6469)",
+  fontSize: "20px",
 };
 
-export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantityChange, onAccessoryRemove }: OrderItemsListProps) {
+export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantityChange, onSizeQuantityChange, onAccessoryRemove }: OrderItemsListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
+  const [removingSize, setRemovingSize] = useState<{ draftItemId: string; size: string; isLastSize: boolean } | null>(null);
   const [removingAccessory, setRemovingAccessory] = useState<{ itemId: string; accessoryId: string } | null>(null);
   const [sizePopoverOpenId, setSizePopoverOpenId] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; alt: string } | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Close size popover on outside click
@@ -87,6 +91,28 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+      {/* Image preview modal */}
+      {previewImage && (
+        <ModalDialog
+          title={previewImage.alt}
+          size="large"
+          isOpen
+          onOpenChange={(open) => { if (!open) setPreviewImage(null); }}
+          isDismissible
+        >
+          <ModalDialogBody>
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewImage.url}
+                alt={previewImage.alt}
+                style={{ maxWidth: "100%", maxHeight: "70vh", objectFit: "contain", borderRadius: "6px" }}
+              />
+            </div>
+          </ModalDialogBody>
+        </ModalDialog>
+      )}
+
       <AlertDialog
         title="Remove item"
         tone="critical"
@@ -109,6 +135,39 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                 setSelectedIds((prev) => { const n = new Set(prev); n.delete(removingItemId); return n; });
               }
               setRemovingItemId(null);
+            }}
+          >
+            Remove
+          </Button>
+        </AlertDialogActions>
+      </AlertDialog>
+
+      <AlertDialog
+        title={removingSize?.isLastSize ? "Remove group" : "Remove size"}
+        tone="critical"
+        isOpen={removingSize !== null}
+        onOpenChange={(open) => { if (!open) setRemovingSize(null); }}
+      >
+        <AlertDialogBody>
+          {removingSize?.isLastSize
+            ? `"${removingSize.size}" is the only remaining size. Removing it will remove the entire group from your order. Are you sure?`
+            : `Are you sure you want to remove size "${removingSize?.size}" from the order?`}
+        </AlertDialogBody>
+        <AlertDialogActions>
+          <Button variant="tertiary" onPress={() => setRemovingSize(null)}>Cancel</Button>
+          <Button
+            variant="primary"
+            tone="critical"
+            onPress={() => {
+              if (removingSize) {
+                if (removingSize.isLastSize) {
+                  onRemove(removingSize.draftItemId);
+                  setSelectedIds((prev) => { const n = new Set(prev); n.delete(removingSize.draftItemId); return n; });
+                } else {
+                  onSizeQuantityChange?.(removingSize.draftItemId, removingSize.size, 0);
+                }
+              }
+              setRemovingSize(null);
             }}
           >
             Remove
@@ -167,310 +226,453 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
           isDisabled={selectedIds.size === 0}
           onPress={removeSelected}
         >
-          Remove all Items
+          Remove items
         </Button>
       </div>
 
       {/* Item cards */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {items.map((item) => {
-          const taxRate = item.product.taxRate ?? 8;
-          const taxAmount = item.lineTotal * (taxRate / 100);
-          const stockQty = item.product.stockQuantity;
-          const attributes = item.selectedAttributes
-            .map((attr) => {
-              const productAttr = item.product.attributes.find((a) => a.id === attr.attributeId);
-              const option = productAttr?.options.find((o) => o.id === attr.selectedOptionId);
-              return option ? `${productAttr?.label}: ${option.label}` : null;
-            })
-            .filter(Boolean) as string[];
+      {(() => {
+        // Pre-compute group numbers for per-size items
+        const groupIndexMap = new Map<string, number>();
+        let gIdx = 0;
+        items.forEach((item) => {
+          if (item.product.quantityMode === "per-size") {
+            groupIndexMap.set(item.draftItemId, ++gIdx);
+          }
+        });
 
-          return (
-            <div key={item.draftItemId} style={{
-              background: "white",
-              border: "1px solid var(--cim-border-base, #dadcdd)",
-              borderRadius: "6px",
-              overflow: "hidden",
-            }}>
-              {/* Card body */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
-                {/* Header: checkbox + name + action buttons */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
-                    <Checkbox
-                      isSelected={selectedIds.has(item.draftItemId)}
-                      onChange={() => toggleItem(item.draftItemId)}
-                    />
-                    <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", whiteSpace: "nowrap" }}>
-                      {item.product.name}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
-                    <button
-                      style={iconBtnStyle}
-                      title="More options"
-                      aria-label="More options"
-                      onClick={() => {}}
-                    >
-                      <IconMenuMoreVertical />
-                    </button>
-                    <button
-                      style={iconBtnStyle}
-                      title="Edit"
-                      aria-label="Edit item"
-                      onClick={() => onEdit(item.draftItemId)}
-                    >
-                      <IconPencil />
-                    </button>
-                    <button
-                      style={{ ...iconBtnStyle, color: "var(--cim-fg-critical, #d10023)" }}
-                      title="Remove"
-                      aria-label="Remove item"
-                      onClick={() => setRemovingItemId(item.draftItemId)}
-                    >
-                      <IconTrash />
-                    </button>
-                  </div>
-                </div>
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {items.map((item) => {
+              const taxRate = item.product.taxRate ?? 8;
+              const colorAttr = item.product.attributes.find((a) => a.type === "color");
+              const selectedColorId = colorAttr
+                ? item.selectedAttributes.find((a) => a.attributeId === colorAttr.id)?.selectedOptionId
+                : undefined;
+              const selectedColorOption = colorAttr?.options.find((o) => o.id === selectedColorId);
+              const displayImageUrl = selectedColorOption?.imageUrl ?? item.product.imageUrl;
 
-                {/* Body: image + quantity + item total */}
-                <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
-                  {/* Product image + edit design link */}
-                  <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+              // ── Per-size item → render as grouped card ──────────────────────
+              if (item.product.quantityMode === "per-size") {
+                const gNum = groupIndexMap.get(item.draftItemId)!;
+                const activeSizes = (item.product.availableSizes ?? []).filter(
+                  (size) => (item.sizeQuantities?.[size] ?? 0) > 0
+                );
+
+                return (
+                  <div key={item.draftItemId} style={{
+                    border: "1px solid var(--cim-border-base, #dadcdd)",
+                    borderRadius: "6px",
+                    overflow: "hidden",
+                    background: "white",
+                  }}>
+                    {/* Group header bar */}
                     <div style={{
-                      width: "187px",
-                      height: "187px",
-                      borderRadius: "6px",
-                      overflow: "hidden",
-                      background: "white",
-                      border: "1px solid var(--cim-border-subtle, #eaebeb)",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
+                      gap: "8px",
+                      padding: "0 12px",
+                      height: "48px",
+                      background: "var(--cim-bg-subtle, #f8f9fa)",
+                      borderBottom: "1px solid var(--cim-border-base, #dadcdd)",
                     }}>
-                      {item.product.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.product.imageUrl}
-                          alt={item.product.name}
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        />
-                      ) : (
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <rect x="3" y="3" width="18" height="18" rx="2" stroke="var(--cim-fg-muted)" strokeWidth="1.5" />
-                        </svg>
-                      )}
-                    </div>
-                    <a
-                      href="https://pens.experience.cimpress.io/us/studio/?key=PRD-ZQO1BK4YA&productVersion=4&locale=en-us&selectedOptions=%7B%22Substrate%20Color%22%3A%22%23000000%22%7D&fullBleedElected=true&mpvId=portAuthorityWomensBrickJacketClone&qty=%7b%22S%22%3a0%2c%22M%22%3a0%2c%223XL%22%3a0%2c%22XS%22%3a5%7d"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ fontSize: "1rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
-                    >
-                      Edit design
-                    </a>
-                  </div>
-
-                  {/* Quantity field + stock (left) */}
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px", minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
-                        <TextField
-                          label={item.product.quantityMode === "per-size" ? "Total Quantity" : "Quantity"}
-                          value={String(item.quantity)}
-                          description={item.product.quantityMode !== "per-size"
-                            ? `Between ${item.product.minOrderQty} – ${item.product.maxOrderQty}`
-                            : undefined}
-                          isInvalid={
-                            item.quantity < item.product.minOrderQty || item.quantity > item.product.maxOrderQty
-                          }
-                          onChange={(val) => {
-                            const n = parseInt(val, 10);
-                            if (!isNaN(n) && n >= item.product.minOrderQty && n <= item.product.maxOrderQty) {
-                              onQuantityChange?.(item.draftItemId, n);
-                            }
-                          }}
-                          inputMode="numeric"
-                          isDisabled={!onQuantityChange || item.product.quantityMode === "per-size"}
-                          isReadOnly={item.product.quantityMode === "per-size"}
-                        />
-
-                        {/* Clickable "Aggregated across sizes" description + popover */}
-                        {item.product.quantityMode === "per-size" && (
-                          <div style={{ position: "relative" }} ref={sizePopoverOpenId === item.draftItemId ? popoverRef : undefined}>
-                            <button
-                              onClick={() => setSizePopoverOpenId(
-                                sizePopoverOpenId === item.draftItemId ? null : item.draftItemId
-                              )}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                padding: "2px 0 0",
-                                cursor: "pointer",
-                                fontSize: "0.875rem",
-                                color: "var(--cim-fg-accent, #007798)",
-                                textDecoration: "underline",
-                                textDecorationStyle: "dotted",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "4px",
-                              }}
-                            >
-                              <IconInfoCircle size={16} />
-                              Aggregated across sizes
-                            </button>
-
-                            {sizePopoverOpenId === item.draftItemId && (
-                              <div
-                                style={{
-                                  position: "absolute",
-                                  top: "calc(100% + 6px)",
-                                  left: 0,
-                                  zIndex: 200,
-                                  background: "white",
-                                  border: "1px solid var(--cim-border-base, #dadcdd)",
-                                  borderRadius: "8px",
-                                  padding: "12px 14px",
-                                  boxShadow: "0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)",
-                                  minWidth: "200px",
-                                  maxWidth: "280px",
-                                }}
-                              >
-                                <p style={{ margin: "0 0 10px", fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
-                                  Size breakdown
-                                </p>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                                  {item.product.availableSizes
-                                    ? item.product.availableSizes.map((size) => {
-                                        const qty = item.sizeQuantities?.[size] ?? 0;
-                                        return (
-                                          <div
-                                            key={size}
-                                            style={{
-                                              display: "flex",
-                                              justifyContent: "space-between",
-                                              alignItems: "center",
-                                              padding: "4px 8px",
-                                              borderRadius: "4px",
-                                              background: qty > 0 ? "var(--cim-bg-info-subtle, #e8f4f8)" : "transparent",
-                                            }}
-                                          >
-                                            <span style={{ fontSize: "0.875rem", color: qty > 0 ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)", fontWeight: qty > 0 ? 600 : 400 }}>
-                                              {size}
-                                            </span>
-                                            <span style={{ fontSize: "0.875rem", color: qty > 0 ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)", fontWeight: qty > 0 ? 600 : 400 }}>
-                                              {qty}
-                                            </span>
-                                          </div>
-                                        );
-                                      })
-                                    : (
-                                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-muted)" }}>No size data</span>
-                                    )}
-                                </div>
-                                <div style={{ borderTop: "1px solid var(--cim-border-subtle, #eaebeb)", marginTop: "10px", paddingTop: "8px", display: "flex", justifyContent: "space-between" }}>
-                                  <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>Total</span>
-                                  <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{item.quantity}</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      {item.product.quantityMode !== "per-size" && (
-                        <div style={{ marginTop: "20px", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", flexShrink: 0 }}>
-                          <IconInfoCircle />
-                        </div>
-                      )}
-                    </div>
-                    {stockQty != null && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ color: "var(--cim-fg-success, #007e3f)", display: "flex" }}>
-                          <IconCheckCircleFill />
-                        </span>
-                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                          In stock - {stockQty}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Item total section (right-aligned) */}
-                  <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", minWidth: "160px" }}>
-                    <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>
-                      Item total
-                    </span>
-                    <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                      Unit Price {item.unitPrice.toFixed(2)} USD
-                    </span>
-                    <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                      Tax {taxAmount.toFixed(2)} USD
-                    </span>
-                    <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", marginTop: "4px" }}>
-                      {item.lineTotal.toFixed(2)} USD
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Selected options disclosure */}
-              <div style={{ borderTop: "1px solid var(--cim-border-subtle, #eaebeb)" }}>
-                <Disclosure title="Selected options and details" variant="subtle">
-                  <div style={{ padding: "12px 16px 16px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                    {attributes.length > 0 ? (
-                      attributes.map((attr, i) => (
-                        <span key={i} style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>{attr}</span>
-                      ))
-                    ) : (
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-muted)" }}>No attributes selected</span>
-                    )}
-                    {item.artworkType !== "none" && item.artworkFileName && (
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                        Artwork: {item.artworkFileName}
-                      </span>
-                    )}
-                    {item.itemDiscount > 0 && (
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-success, #15803d)", fontWeight: 500 }}>
-                        {item.itemDiscount}% item discount applied
-                      </span>
-                    )}
-                  </div>
-                </Disclosure>
-              </div>
-
-              {/* Accessories rows */}
-              {item.accessories && item.accessories.length > 0 && (
-                <div style={{ borderTop: "1px solid var(--cim-border-subtle, #eaebeb)" }}>
-                  {item.accessories.map((acc) => (
-                    <div
-                      key={acc.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "10px 16px",
-                        gap: "12px",
-                      }}
-                    >
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                        {acc.quantity} {acc.label} added as an accessory (USD {(acc.quantity * acc.unitPrice).toFixed(2)})
+                      <Checkbox
+                        isSelected={selectedIds.has(item.draftItemId)}
+                        onChange={() => toggleItem(item.draftItemId)}
+                      />
+                      <span style={{ flex: 1, fontSize: "0.9375rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        G{gNum}({activeSizes.length} item{activeSizes.length !== 1 ? "s" : ""}) - {item.product.name}
                       </span>
                       <button
-                        style={{ ...iconBtnStyle, color: "var(--cim-fg-critical, #d10023)", flexShrink: 0 }}
-                        title="Remove accessory"
-                        aria-label={`Remove ${acc.label} accessory`}
-                        onClick={() => setRemovingAccessory({ itemId: item.draftItemId, accessoryId: acc.id })}
+                        style={{ ...iconBtnStyle, flexShrink: 0 }}
+                        title="Remove group"
+                        aria-label="Remove group"
+                        onClick={() => setRemovingItemId(item.draftItemId)}
                       >
                         <IconTrash />
                       </button>
                     </div>
-                  ))}
+
+                    {/* Sub-item cards — one per active size */}
+                    {activeSizes.length === 0 ? (
+                      <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--cim-fg-muted, #94979b)", fontSize: "0.875rem" }}>
+                        No sizes selected
+                      </div>
+                    ) : (
+                      <div>
+                        {activeSizes.map((size, idx) => {
+                          const sizeQty = item.sizeQuantities?.[size] ?? 0;
+                          const sizeLineTotal = parseFloat((item.unitPrice * sizeQty).toFixed(2));
+                          const sizeTax = parseFloat((sizeLineTotal * (taxRate / 100)).toFixed(2));
+                          const stock = item.product.stockBySize?.[size];
+                          const overStock = stock !== undefined && sizeQty > stock;
+
+                          return (
+                            <div key={size} style={{
+                              borderTop: idx === 0 ? "none" : "1px solid var(--cim-border-subtle, #eaebeb)",
+                            }}>
+                              {/* Sub-item body */}
+                              <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
+                                {/* Sub-item header */}
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                                  <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
+                                    {item.product.name} - {size}
+                                  </span>
+                                  <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                                    <button style={iconBtnStyle} title="More options" aria-label="More options" onClick={() => {}}>
+                                      <IconMenuMoreVertical />
+                                    </button>
+                                    <button style={iconBtnStyle} title="Edit" aria-label="Edit item" onClick={() => onEdit(item.draftItemId)}>
+                                      <IconPencil />
+                                    </button>
+                                    <button
+                                      style={iconBtnStyle}
+                                      title="Remove size"
+                                      aria-label={`Remove ${size} from order`}
+                                      onClick={() => {
+                                        const otherActiveSizes = Object.entries(item.sizeQuantities ?? {})
+                                          .filter(([s, q]) => s !== size && (q ?? 0) > 0);
+                                        setRemovingSize({
+                                          draftItemId: item.draftItemId,
+                                          size,
+                                          isLastSize: otherActiveSizes.length === 0,
+                                        });
+                                      }}
+                                    >
+                                      <IconTrash />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Image + qty + total */}
+                                <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
+                                  {/* Image */}
+                                  <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+                                    <div style={{
+                                      width: "187px", height: "187px", borderRadius: "6px", overflow: "hidden",
+                                      background: "white", border: "1px solid var(--cim-border-subtle, #eaebeb)",
+                                      display: "flex", alignItems: "center", justifyContent: "center",
+                                    }}>
+                                      {displayImageUrl ? (
+                                        <button
+                                          onClick={() => setPreviewImage({ url: displayImageUrl, alt: selectedColorOption?.label ?? item.product.name })}
+                                          style={{ width: "100%", height: "100%", padding: 0, border: "none", background: "none", cursor: "zoom-in", display: "flex" }}
+                                          aria-label="Preview image"
+                                        >
+                                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                                          <img src={displayImageUrl} alt={selectedColorOption?.label ?? item.product.name}
+                                            style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                        </button>
+                                      ) : (
+                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                          <rect x="3" y="3" width="18" height="18" rx="2" stroke="var(--cim-fg-muted)" strokeWidth="1.5" />
+                                        </svg>
+                                      )}
+                                    </div>
+                                    <a
+                                      href="https://pens.experience.cimpress.io/us/studio/?key=PRD-ZQO1BK4YA&productVersion=4&locale=en-us"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ fontSize: "1rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
+                                    >
+                                      Edit design
+                                    </a>
+                                  </div>
+
+                                  {/* Right column: qty+total row + disclosure */}
+                                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "16px", minWidth: 0 }}>
+                                    {/* Quantity + item total row */}
+                                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
+                                      {/* Quantity + stock */}
+                                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                        <Select
+                                          label="Quantity"
+                                          selectedKey={String(sizeQty)}
+                                          description={`Size: ${size}`}
+                                          onSelectionChange={(val) => {
+                                            const n = Number(val);
+                                            if (n >= 0) onSizeQuantityChange?.(item.draftItemId, size, n);
+                                          }}
+                                        >
+                                          {(() => {
+                                            const maxOpt = stock ?? Math.min(item.product.maxOrderQty, 500);
+                                            const opts: number[] = [];
+                                            for (let q = 1; q <= maxOpt; q++) opts.push(q);
+                                            return opts.map((q) => (
+                                              <SelectItem key={String(q)} id={String(q)}>{q}</SelectItem>
+                                            ));
+                                          })()}
+                                        </Select>
+                                        {stock !== undefined && (
+                                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                            <span style={{ color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-success, #007e3f)", display: "flex" }}>
+                                              <IconCheckCircleFill />
+                                            </span>
+                                            <span style={{ fontSize: "0.875rem", color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-base, #15191d)" }}>
+                                              {overStock ? `Over stock — only ${stock} left` : `In stock - ${stock}`}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Item total */}
+                                      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", minWidth: "160px" }}>
+                                        <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>Item total</span>
+                                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Tax {sizeTax.toFixed(2)} USD</span>
+                                        <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", marginTop: "4px" }}>
+                                          {sizeLineTotal.toFixed(2)} USD
+                                        </span>
+                                        <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                                          USD {item.unitPrice.toFixed(2)} / unit
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Selected options disclosure */}
+                                    <Disclosure title="Selected options and details" variant="subtle">
+                                      <div style={{ padding: "4px 0 8px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                                        {selectedColorOption && (
+                                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                                            Color: {selectedColorOption.label}
+                                          </span>
+                                        )}
+                                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>Size: {size}</span>
+                                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                                          {sizeQty} x <span style={{ color: "var(--cim-fg-subtle, #5f6469)" }}>(USD {item.unitPrice.toFixed(2)} / unit)</span>
+                                        </span>
+                                        {item.artworkType !== "none" && item.artworkFileName && (
+                                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                                            Artwork: {item.artworkFileName}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </Disclosure>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // ── Regular (non per-size) item card ───────────────────────────
+              const taxAmount = item.lineTotal * (taxRate / 100);
+              const stockQty = item.product.stockQuantity;
+              const attributes = item.selectedAttributes
+                .map((attr) => {
+                  const productAttr = item.product.attributes.find((a) => a.id === attr.attributeId);
+                  const option = productAttr?.options.find((o) => o.id === attr.selectedOptionId);
+                  return option ? `${productAttr?.label}: ${option.label}` : null;
+                })
+                .filter(Boolean) as string[];
+
+              return (
+                <div key={item.draftItemId} style={{
+                  background: "white",
+                  border: "1px solid var(--cim-border-base, #dadcdd)",
+                  borderRadius: "6px",
+                  overflow: "hidden",
+                }}>
+                  {/* Card body */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
+                    {/* Header: checkbox + name + action buttons */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                        <Checkbox
+                          isSelected={selectedIds.has(item.draftItemId)}
+                          onChange={() => toggleItem(item.draftItemId)}
+                        />
+                        <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", whiteSpace: "nowrap" }}>
+                          {item.product.name}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                        <button style={iconBtnStyle} title="More options" aria-label="More options" onClick={() => {}}>
+                          <IconMenuMoreVertical />
+                        </button>
+                        <button style={iconBtnStyle} title="Edit" aria-label="Edit item" onClick={() => onEdit(item.draftItemId)}>
+                          <IconPencil />
+                        </button>
+                        <button
+                          style={iconBtnStyle}
+                          title="Remove"
+                          aria-label="Remove item"
+                          onClick={() => setRemovingItemId(item.draftItemId)}
+                        >
+                          <IconTrash />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Body: image + quantity + item total */}
+                    <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
+                      {/* Product image + edit design link */}
+                      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <div style={{
+                          width: "187px", height: "187px", borderRadius: "6px", overflow: "hidden",
+                          background: "white", border: "1px solid var(--cim-border-subtle, #eaebeb)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          {displayImageUrl ? (
+                            <button
+                              onClick={() => setPreviewImage({ url: displayImageUrl, alt: selectedColorOption?.label ?? item.product.name })}
+                              style={{ width: "100%", height: "100%", padding: 0, border: "none", background: "none", cursor: "zoom-in", display: "flex" }}
+                              aria-label="Preview image"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={displayImageUrl} alt={selectedColorOption?.label ?? item.product.name}
+                                style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            </button>
+                          ) : (
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <rect x="3" y="3" width="18" height="18" rx="2" stroke="var(--cim-fg-muted)" strokeWidth="1.5" />
+                            </svg>
+                          )}
+                        </div>
+                        <a
+                          href="https://pens.experience.cimpress.io/us/studio/?key=PRD-ZQO1BK4YA&productVersion=4&locale=en-us&selectedOptions=%7B%22Substrate%20Color%22%3A%22%23000000%22%7D&fullBleedElected=true&mpvId=portAuthorityWomensBrickJacketClone&qty=%7b%22S%22%3a0%2c%22M%22%3a0%2c%223XL%22%3a0%2c%22XS%22%3a5%7d"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: "1rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
+                        >
+                          Edit design
+                        </a>
+                      </div>
+
+                      {/* Right column: qty+total row + disclosure */}
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "16px", minWidth: 0 }}>
+                        {/* Quantity + item total row */}
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
+                          {/* Quantity field + stock */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <div style={{ minWidth: 0 }}>
+                                <Select
+                                  label="Quantity"
+                                  selectedKey={String(item.quantity)}
+                                  onSelectionChange={(val) => {
+                                    const n = Number(val);
+                                    if (n > 0) onQuantityChange?.(item.draftItemId, n);
+                                  }}
+                                  description={`Qty has to be between ${item.product.minOrderQty} - ${item.product.maxOrderQty}`}
+                                  isDisabled={!onQuantityChange}
+                                >
+                                  {(() => {
+                                    const step = 500;
+                                    const opts = new Set<number>([item.product.minOrderQty, item.product.maxOrderQty]);
+                                    const first = Math.ceil(item.product.minOrderQty / step) * step;
+                                    for (let q = first; q <= item.product.maxOrderQty; q += step) opts.add(q);
+                                    return [...opts].sort((a, b) => a - b).map((q) => (
+                                      <SelectItem key={String(q)} id={String(q)}>{q}</SelectItem>
+                                    ));
+                                  })()}
+                                </Select>
+                              </div>
+                              <button
+                                aria-label="Quantity information"
+                                style={{
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  background: "none", border: "none", cursor: "pointer",
+                                  color: "var(--cim-fg-subtle, #5f6469)", padding: "4px",
+                                  marginTop: "20px", flexShrink: 0,
+                                }}
+                              >
+                                <IconInfoCircle size={24} />
+                              </button>
+                            </div>
+                            {stockQty != null && (() => {
+                              const overStock = item.quantity > 0 && item.quantity > stockQty;
+                              return (
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <span style={{ color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-success, #007e3f)", display: "flex" }}>
+                                    <IconCheckCircleFill />
+                                  </span>
+                                  <span style={{ fontSize: "0.875rem", color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-base, #15191d)" }}>
+                                    In stock - {stockQty}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Item total */}
+                          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", minWidth: "160px" }}>
+                            <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>Item total</span>
+                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Tax {taxAmount.toFixed(2)} USD</span>
+                            <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", marginTop: "4px" }}>
+                              {item.lineTotal.toFixed(2)} USD
+                            </span>
+                            <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                              USD {item.unitPrice.toFixed(2)} / unit
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Selected options disclosure */}
+                        <Disclosure title="Selected options and details" variant="subtle">
+                          <div style={{ padding: "4px 0 8px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                            {attributes.length > 0 ? (
+                              attributes.map((attr, i) => (
+                                <span key={i} style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>{attr}</span>
+                              ))
+                            ) : (
+                              <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-muted)" }}>No attributes selected</span>
+                            )}
+                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                              {item.quantity} x <span style={{ color: "var(--cim-fg-subtle, #5f6469)" }}>(USD {item.unitPrice.toFixed(2)} / unit)</span>
+                            </span>
+                            {item.artworkType !== "none" && item.artworkFileName && (
+                              <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                                Artwork: {item.artworkFileName}
+                              </span>
+                            )}
+                            {item.itemDiscount > 0 && (
+                              <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-success, #15803d)", fontWeight: 500 }}>
+                                {item.itemDiscount}% item discount applied
+                              </span>
+                            )}
+                          </div>
+                        </Disclosure>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Accessories rows */}
+                  {item.accessories && item.accessories.length > 0 && (
+                    <div style={{ borderTop: "1px solid var(--cim-border-subtle, #eaebeb)" }}>
+                      {item.accessories.map((acc) => (
+                        <div
+                          key={acc.id}
+                          style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            padding: "10px 16px", gap: "12px",
+                          }}
+                        >
+                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
+                            {acc.quantity} {acc.label} added as an accessory (USD {(acc.quantity * acc.unitPrice).toFixed(2)})
+                          </span>
+                          <button
+                            style={{ ...iconBtnStyle, flexShrink: 0 }}
+                            title="Remove accessory"
+                            aria-label={`Remove ${acc.label} accessory`}
+                            onClick={() => setRemovingAccessory({ itemId: item.draftItemId, accessoryId: acc.id })}
+                          >
+                            <IconTrash />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
+        );
+      })()}
     </div>
   );
 }

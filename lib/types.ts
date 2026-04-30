@@ -87,6 +87,7 @@ export interface ProductAttributeOption {
   id: string;
   label: string;
   hexColor?: string; // for color-type attributes
+  imageUrl?: string; // per-color product image (replaces product thumbnail when selected)
 }
 
 export interface ProductAttribute {
@@ -113,6 +114,7 @@ export interface ProductCatalogItem {
   id: string; // CIM ID e.g. "CIM-9HC1KU"
   name: string;
   category: string;
+  description?: string; // short subtitle shown in the product header, falls back to category
   imageUrl: string;
   baseUnitPrice: number;
   pricingTiers: QuantityPricingTier[];
@@ -123,7 +125,8 @@ export interface ProductCatalogItem {
   extraCharges?: ProductExtraCharge[];
   taxRate?: number; // percentage e.g. 5.33
   quantityMode?: "per-size"; // when set, quantity is entered per size and aggregated
-  availableSizes?: string[]; // e.g. ["XS","S","M","L","XL","2XL","3XL","4XL","5XL","6XL"]
+  availableSizes?: string[]; // e.g. ["XS","S","M","L","XL","XXL","3XL","4XL"]
+  stockBySize?: Record<string, number>; // per-size stock availability; omit a size = unlimited
 }
 
 export interface DraftOrderItemAttribute {

@@ -85,16 +85,27 @@ interface AccessoryCardProps {
   onAdd: (acc: DraftOrderItemAccessory) => void;
   isAdded?: boolean;
   onRemove?: () => void;
+  mainItemQty?: number;
 }
 
-export function AccessoryCard({ item, onAdd, isAdded = false, onRemove }: AccessoryCardProps) {
+export function AccessoryCard({ item, onAdd, isAdded = false, onRemove, mainItemQty = 0 }: AccessoryCardProps) {
   const [qty, setQty] = useState<number>(0);
 
   useEffect(() => {
     if (!isAdded) setQty(0);
   }, [isAdded]);
 
-  const qtyOptions = generateQtyOptions(item.minQty, item.maxQty);
+  // Accessory qty cannot exceed the main item's selected qty
+  const effectiveMax = mainItemQty > 0 ? Math.min(item.maxQty, mainItemQty) : 0;
+  const isQtyDisabled = mainItemQty === 0;
+
+  useEffect(() => {
+    if (qty > effectiveMax) setQty(effectiveMax > 0 ? effectiveMax : 0);
+  }, [effectiveMax, qty]);
+
+  const qtyOptions = effectiveMax > 0
+    ? generateQtyOptions(item.minQty, effectiveMax)
+    : [0];
   const itemTotal = qty * item.unitPrice;
   const hasQty = qty > 0;
 
@@ -154,7 +165,7 @@ export function AccessoryCard({ item, onAdd, isAdded = false, onRemove }: Access
           label="Quantity"
           selectedKey={String(qty)}
           onSelectionChange={(val) => setQty(Number(val))}
-          description={`Quantity has to be between ${item.minQty} - ${item.maxQty}`}
+          isDisabled={isQtyDisabled}
         >
           {qtyOptions.map((q) => (
             <SelectItem key={String(q)} id={String(q)}>{q}</SelectItem>

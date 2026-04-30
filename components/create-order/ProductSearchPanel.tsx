@@ -15,6 +15,7 @@ interface ProductSearchPanelProps {
   onRemoveItem: (draftItemId: string) => void;
   onDuplicateItem: (draftItemId: string) => void;
   onQuantityChange: (draftItemId: string, newQty: number) => void;
+  onSizeQuantityChange?: (draftItemId: string, size: string, newQty: number) => void;
   onAccessoryRemove: (draftItemId: string, accessoryId: string) => void;
   editingItem: DraftOrderItem | null;
 }
@@ -37,6 +38,7 @@ export function ProductSearchPanel({
   onRemoveItem,
   onDuplicateItem,
   onQuantityChange,
+  onSizeQuantityChange,
   onAccessoryRemove,
   editingItem,
 }: ProductSearchPanelProps) {
@@ -151,6 +153,7 @@ export function ProductSearchPanel({
           onRemove={onRemoveItem}
           onDuplicate={onDuplicateItem}
           onQuantityChange={onQuantityChange}
+          onSizeQuantityChange={onSizeQuantityChange}
           onAccessoryRemove={onAccessoryRemove}
         />
       )}

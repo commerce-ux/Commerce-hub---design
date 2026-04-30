@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef, useCallback } from "react";
-import { Button, Select, SelectItem, TextField, Disclosure, Badge } from "@cimpress-ui/react";
+import { Button, Select, SelectItem, TextField, Disclosure, Badge, Tooltip } from "@cimpress-ui/react";
 import { IconInfoCircle, IconCheckCircleFill, IconChevronRight } from "@cimpress-ui/react/icons";
 import type { ProductCatalogItem, DraftOrderItem, DraftOrderItemAttribute, QuantityPricingTier } from "@/lib/types";
 import { PreviousArtworkModal } from "./PreviousArtworkModal";
@@ -76,6 +76,23 @@ function generateQuantityOptions(min: number, max: number, tiers: QuantityPricin
     for (let q = min; q <= max; q += step) opts.add(q);
   }
   return [...opts].filter((q) => q >= min && q <= max).sort((a, b) => a - b);
+}
+
+/** Computes the step size to use within each pricing tier range. */
+function computeIncrementRanges(
+  tiers: QuantityPricingTier[],
+  minQty: number,
+  maxQty: number
+): { from: number; to: number; step: number; unitPrice: number }[] {
+  const sorted = [...tiers].sort((a, b) => a.minQty - b.minQty);
+  return sorted.map((tier, i) => {
+    const from = Math.max(tier.minQty, minQty);
+    const to = i + 1 < sorted.length ? sorted[i + 1].minQty : maxQty;
+    const width = to - from;
+    // Small ranges get a 50-unit step; larger ranges get 100
+    const step = width <= 100 ? 50 : 100;
+    return { from, to, step, unitPrice: tier.unitPrice };
+  });
 }
 
 function getContextualTiers(
@@ -254,6 +271,40 @@ function ArtworkPreview({
   );
 }
 
+// ── Color swatch with tooltip ─────────────────────────────────────────────────
+function SwatchButton({
+  label, hexColor, isSelected, onClick,
+}: { label: string; hexColor: string; isSelected: boolean; onClick: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLButtonElement>(null);
+  return (
+    <Tooltip label={label} isOpen={open} onOpenChange={setOpen} triggerRef={ref} placement="top">
+      <button
+        ref={ref}
+        aria-label={label}
+        aria-pressed={isSelected}
+        onClick={onClick}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        style={{
+          width: "24px",
+          height: "24px",
+          borderRadius: "50%",
+          background: hexColor,
+          border: isSelected ? "2px solid var(--cim-fg-accent, #0091b8)" : "2px solid transparent",
+          outline: isSelected ? "1px solid var(--cim-fg-accent, #0091b8)" : "none",
+          outlineOffset: "2px",
+          cursor: "pointer",
+          flexShrink: 0,
+          padding: 0,
+        }}
+      />
+    </Tooltip>
+  );
+}
+
 export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, ItemConfigurationCardProps>(
   ({ product, initialValues, onAddToOrder, onLineTotalChange, onValidityChange, onPriceBreakdownChange }, ref) => {
     const [activeTab, setActiveTab] = useState<TabLabel>("Attributes");
@@ -326,9 +377,11 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [selectedChargeId, setSelectedChargeId] = useState<string | null>(null);
     const [isCustomQty, setIsCustomQty] = useState(false);
     const [customQtyInput, setCustomQtyInput] = useState("");
-    const [showAllTiers, setShowAllTiers] = useState(false);
     const [pricingGuideSelected, setPricingGuideSelected] = useState<number | null>(null);
-    const [isPricingGuideOpen, setIsPricingGuideOpen] = useState(false);
+    const [isQtyInfoOpen, setIsQtyInfoOpen] = useState(false);
+    const qtyInfoBtnRef = useRef<HTMLButtonElement>(null);
+    const pricingGuideScrollRef = useRef<HTMLDivElement>(null);
+    const pricingGuideRowRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
     const [addedAccessories, setAddedAccessories] = useState<import("@/lib/types").DraftOrderItemAccessory[]>([]);
     const [showAllAccessories, setShowAllAccessories] = useState(false);
     const [isChargesExpanded, setIsChargesExpanded] = useState(false);
@@ -338,21 +391,57 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     // basePrice is 0 until the user has entered a quantity
     const basePrice = quantityInput ? parseFloat((unitPrice * quantity).toFixed(2)) : 0;
 
-    // Pricing guide — one row per dropdown quantity option
-    const PRICING_GUIDE_VISIBLE = 10;
+    // Pricing guide — one row per computed-step within each pricing tier range
     const recommendedTier = product.pricingTiers.find((t) => t.recommended);
+    const incrementRanges = computeIncrementRanges(product.pricingTiers, product.minOrderQty, product.maxOrderQty);
     const allGuideRows = (() => {
-      const opts: number[] = [];
-      for (let q = product.minOrderQty; q <= product.maxOrderQty; q += 50) opts.push(q);
-      if (opts[opts.length - 1] !== product.maxOrderQty) opts.push(product.maxOrderQty);
-      return opts.map((q) => ({
-        qty: q,
-        unitPrice: resolvePricingTier(product.pricingTiers, q),
-        recommended: recommendedTier ? q >= recommendedTier.minQty && q <= (recommendedTier.maxQty ?? product.maxOrderQty) : false,
-      }));
+      const seen = new Set<number>();
+      const rows: { qty: number; unitPrice: number; recommended: boolean; step: number; isRangeStart: boolean }[] = [];
+      for (const range of incrementRanges) {
+        for (let q = range.from; q < range.to; q += range.step) {
+          if (q >= product.minOrderQty && q <= product.maxOrderQty && !seen.has(q)) {
+            seen.add(q);
+            rows.push({
+              qty: q,
+              unitPrice: resolvePricingTier(product.pricingTiers, q),
+              recommended: recommendedTier ? q === recommendedTier.minQty : false,
+              step: range.step,
+              isRangeStart: q === range.from,
+            });
+          }
+        }
+      }
+      // Always include maxOrderQty as the final row
+      if (!seen.has(product.maxOrderQty)) {
+        const lastRange = incrementRanges[incrementRanges.length - 1];
+        rows.push({
+          qty: product.maxOrderQty,
+          unitPrice: resolvePricingTier(product.pricingTiers, product.maxOrderQty),
+          recommended: recommendedTier ? product.maxOrderQty === recommendedTier.minQty : false,
+          step: lastRange?.step ?? 50,
+          isRangeStart: false,
+        });
+      }
+      return rows.sort((a, b) => a.qty - b.qty);
     })();
     const sortedTiersAll = allGuideRows;
-    const pricingGuideRows = showAllTiers ? sortedTiersAll : sortedTiersAll.slice(0, PRICING_GUIDE_VISIBLE);
+
+    // Effective stock is capped at maxOrderQty — you can't order more than MOQ regardless of stock
+    const effectiveStock = product.stockQuantity !== undefined
+      ? Math.min(product.stockQuantity, product.maxOrderQty)
+      : undefined;
+
+    // Upsell nudge: next pricing tier above current qty, capped by effectiveStock and maxOrderQty
+    const upsellCap = effectiveStock ?? product.maxOrderQty;
+    const nextTier = quantity > 0
+      ? product.pricingTiers
+          .slice()
+          .sort((a, b) => a.minQty - b.minQty)
+          .find((t) => t.minQty > quantity && t.minQty <= upsellCap && t.unitPrice < unitPrice)
+      : null;
+    const upsellUnits = nextTier ? nextTier.minQty - quantity : 0;
+    const upsellCost = nextTier ? parseFloat((upsellUnits * nextTier.unitPrice).toFixed(2)) : 0;
+
     const selectedCharge = (product.extraCharges ?? []).find((c) => c.id === selectedChargeId);
     // Artwork charge only applies once the user has selected an artwork option
     const artworkCharge = artworkOption !== null ? 10 : 0;
@@ -431,6 +520,21 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
       setSizeQuantities(initialValues?.sizeQuantities ?? {});
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [product.id]);
+
+    // Scroll pricing guide to the nearest row when quantity changes
+    useEffect(() => {
+      if (!quantity) return;
+      let nearest = sortedTiersAll[0];
+      let minDiff = Math.abs((sortedTiersAll[0]?.qty ?? 0) - quantity);
+      for (const row of sortedTiersAll) {
+        const diff = Math.abs(row.qty - quantity);
+        if (diff < minDiff) { minDiff = diff; nearest = row; }
+      }
+      if (!nearest) return;
+      const el = pricingGuideRowRefs.current.get(nearest.qty);
+      el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [quantity]);
 
     // Sync aggregated total quantity from per-size inputs
     useEffect(() => {
@@ -550,7 +654,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
             <div style={{ flex: 1, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>{product.name}</p>
-                <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", lineHeight: "20px" }}>{product.category}</p>
+                <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", lineHeight: "20px" }}>{product.description ?? product.category}</p>
               </div>
               <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", whiteSpace: "nowrap", flexShrink: 0 }}>{product.id}</span>
             </div>
@@ -569,7 +673,8 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                     onClick={() => {
                       setSelectedAttributes(product.attributes.map((attr) => ({ attributeId: attr.id, selectedOptionId: "" })));
                       setQuantityInput("");
-                      setQuantity(product.minOrderQty);
+                      setQuantity(0);
+                      setSizeQuantities({});
                       setUpsellApplied(false);
                       setPreUpsellQuantity(null);
                       setUpsellInfo(null);
@@ -602,24 +707,12 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                             {attr.options.map((opt) => {
                               const isSelected = currentVal === opt.id;
                               return (
-                                <button
+                                <SwatchButton
                                   key={opt.id}
-                                  title={opt.label}
-                                  aria-label={opt.label}
-                                  aria-pressed={isSelected}
+                                  label={opt.label}
+                                  hexColor={opt.hexColor ?? "#ccc"}
+                                  isSelected={isSelected}
                                   onClick={() => handleAttributeChange(attr.id, opt.id)}
-                                  style={{
-                                    width: "30px",
-                                    height: "30px",
-                                    borderRadius: "6px",
-                                    background: opt.hexColor ?? "#ccc",
-                                    border: isSelected ? "2px solid var(--cim-fg-accent, #0091b8)" : "2px solid transparent",
-                                    outline: isSelected ? "1px solid var(--cim-fg-accent, #0091b8)" : "none",
-                                    outlineOffset: "2px",
-                                    cursor: "pointer",
-                                    flexShrink: 0,
-                                    padding: 0,
-                                  }}
                                 />
                               );
                             })}
@@ -685,61 +778,74 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                   <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
                     Size and quantity<span style={{ color: "var(--cim-fg-critical, #d10023)", marginLeft: "2px" }}>*</span>
                   </span>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "8px" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
                     {product.availableSizes.map((size) => {
                       const qty = sizeQuantities[size] ?? 0;
+                      const stock = product.stockBySize?.[size];
+                      const isOver = stock !== undefined && qty > stock;
                       return (
-                        <div
-                          key={size}
-                          style={{
-                            border: qty > 0
-                              ? "1.5px solid var(--cim-border-accent, #0091b8)"
-                              : "1px solid var(--cim-border-base, #dadcdd)",
-                            borderRadius: "6px",
-                            padding: "8px 6px",
+                        <div key={size} style={{ display: "flex", flexDirection: "column", gap: "4px", width: "150px" }}>
+                          {/* Input box: size prefix inside + number value */}
+                          <div style={{
                             display: "flex",
-                            flexDirection: "column",
                             alignItems: "center",
-                            gap: "4px",
-                            background: qty > 0 ? "var(--cim-bg-info-subtle, #e8f4f8)" : "white",
-                          }}
-                        >
-                          <span style={{
-                            fontSize: "0.75rem",
-                            fontWeight: 600,
-                            color: "var(--cim-fg-subtle, #5f6469)",
-                            userSelect: "none",
+                            minHeight: "40px",
+                            border: isOver
+                              ? "1px solid var(--cim-border-critical, #d10023)"
+                              : "1px solid var(--cim-border-base, #dadcdd)",
+                            borderRadius: "4px",
+                            background: "white",
+                            overflow: "hidden",
                           }}>
-                            {size}
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            value={qty === 0 ? "" : qty}
-                            placeholder="0"
-                            onChange={(e) => {
-                              const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-                              setSizeQuantities((prev) => ({ ...prev, [size]: val }));
-                            }}
-                            style={{
-                              width: "100%",
-                              textAlign: "center",
-                              border: "none",
-                              outline: "none",
+                            {/* Size label prefix */}
+                            <span style={{
+                              padding: "0 4px 0 12px",
                               fontSize: "1rem",
-                              fontWeight: 600,
-                              color: "var(--cim-fg-base, #15191d)",
-                              background: "transparent",
-                              padding: 0,
-                              MozAppearance: "textfield",
-                            } as React.CSSProperties}
-                          />
+                              color: "var(--cim-fg-subtle, #5f6469)",
+                              userSelect: "none",
+                              flexShrink: 0,
+                            }}>
+                              {size}
+                            </span>
+                            {/* Number input */}
+                            <input
+                              type="number"
+                              min={0}
+                              max={stock}
+                              value={qty === 0 ? "" : qty}
+                              placeholder="0"
+                              onChange={(e) => {
+                                const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                setSizeQuantities((prev) => ({ ...prev, [size]: val }));
+                              }}
+                              style={{
+                                flex: 1,
+                                minWidth: 0,
+                                border: "none",
+                                outline: "none",
+                                fontSize: "1rem",
+                                fontWeight: qty > 0 ? 600 : 400,
+                                color: qty > 0
+                                  ? (isOver ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-base, #15191d)")
+                                  : "var(--cim-fg-subtle, #5f6469)",
+                                background: "transparent",
+                                padding: "0 12px 0 4px",
+                                MozAppearance: "textfield",
+                              } as React.CSSProperties}
+                            />
+                          </div>
+                          {/* Stock hint / error */}
+                          {stock !== undefined && (
+                            <span style={{ fontSize: "0.75rem", color: isOver ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-subtle, #5f6469)" }}>
+                              Only {stock} left
+                            </span>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                   {/* Total Quantity read-only */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", maxWidth: "180px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", maxWidth: "382px" }}>
                     <TextField
                       label="Total Quantity"
                       value={quantity > 0 ? String(quantity) : ""}
@@ -751,137 +857,267 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                       error={quantity > 0 && quantity < product.minOrderQty ? `Minimum is ${product.minOrderQty}` : undefined}
                     />
                   </div>
-                  {product.stockQuantity !== undefined && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span style={{ color: "var(--cim-fg-success, #007e3f)", display: "flex" }}>
-                        <IconCheckCircleFill />
-                      </span>
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                        In stock - {product.stockQuantity}
-                      </span>
-                    </div>
+                  {effectiveStock !== undefined && (
+                    (() => {
+                      const overStock = quantity > 0 && quantity > effectiveStock;
+                      return (
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-success, #007e3f)", display: "flex" }}>
+                            <IconCheckCircleFill />
+                          </span>
+                          <span style={{ fontSize: "0.875rem", color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-base, #15191d)" }}>
+                            In stock - {effectiveStock}
+                          </span>
+                        </div>
+                      );
+                    })()
                   )}
                 </div>
               ) : (
                 /* Standard single quantity field */
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxWidth: "378px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxWidth: "420px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <Select
-                        label="Quantity"
+                        label="Select Quantity"
                         selectedKey={quantityInput || null}
-                        onOpenChange={(isOpen) => { if (isOpen) setIsPricingGuideOpen(true); }}
+                        isRequired
                         onSelectionChange={(val) => {
                           const n = Number(val);
                           setQuantityInput(n > 0 ? String(n) : "");
                           if (n > 0) handleQuantityChange(n);
                         }}
-                        description={`Between ${product.minOrderQty} – ${product.maxOrderQty}`}
+                        description={`Quantity has to be between ${product.minOrderQty} - ${product.maxOrderQty}`}
                       >
-                        {(() => {
-                          const opts: number[] = [];
-                          for (let q = product.minOrderQty; q <= product.maxOrderQty; q += 50) opts.push(q);
-                          if (opts[opts.length - 1] !== product.maxOrderQty) opts.push(product.maxOrderQty);
-                          return opts.map((q) => (
-                            <SelectItem key={String(q)} id={String(q)}>{q}</SelectItem>
-                          ));
-                        })()}
+                        {allGuideRows.map((row) => (
+                          <SelectItem key={String(row.qty)} id={String(row.qty)}>{row.qty}</SelectItem>
+                        ))}
                       </Select>
                     </div>
-                  </div>
-                  {product.stockQuantity !== undefined && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span style={{ color: "var(--cim-fg-success, #007e3f)", display: "flex" }}>
-                        <IconCheckCircleFill />
-                      </span>
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                        In stock - {product.stockQuantity}
-                      </span>
+                    <div style={{ position: "relative", marginTop: "20px", flexShrink: 0 }}>
+                      <button
+                        ref={qtyInfoBtnRef}
+                        aria-label="Quantity increment information"
+                        aria-expanded={isQtyInfoOpen}
+                        onClick={() => setIsQtyInfoOpen((o) => !o)}
+                        onBlur={(e) => {
+                          if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node)) {
+                            setIsQtyInfoOpen(false);
+                          }
+                        }}
+                        style={{
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "none", border: "none", cursor: "pointer",
+                          color: "var(--cim-fg-subtle, #5f6469)", padding: "4px",
+                        }}
+                      >
+                        <IconInfoCircle size={24} />
+                      </button>
+                      {isQtyInfoOpen && (
+                        <div
+                          role="tooltip"
+                          style={{
+                            position: "absolute",
+                            top: "calc(100% + 6px)",
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            background: "var(--cim-bg-inverse, #15191d)",
+                            color: "var(--cim-fg-on-dark, #ffffff)",
+                            borderRadius: "6px",
+                            padding: "10px 14px",
+                            fontSize: "0.8125rem",
+                            lineHeight: "1.5",
+                            whiteSpace: "nowrap",
+                            zIndex: 50,
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                            pointerEvents: "none",
+                          }}
+                        >
+                          <p style={{ margin: "0 0 6px", fontWeight: 600, fontSize: "0.75rem", opacity: 0.75, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            Qty increments
+                          </p>
+                          {incrementRanges.map((range, i) => (
+                            <p key={i} style={{ margin: i < incrementRanges.length - 1 ? "0 0 2px" : "0" }}>
+                              {range.from} – {range.to} &nbsp;→&nbsp; every {range.step} units
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
+                  </div>
+                  {effectiveStock !== undefined && (
+                    (() => {
+                      const overStock = quantity > 0 && quantity > effectiveStock;
+                      return (
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-success, #007e3f)", display: "flex" }}>
+                            <IconCheckCircleFill />
+                          </span>
+                          <span style={{ fontSize: "0.875rem", color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-base, #15191d)" }}>
+                            In stock - {effectiveStock}
+                          </span>
+                        </div>
+                      );
+                    })()
                   )}
                 </div>
               )}
 
-              {/* Pricing guide disclosure */}
-              <Disclosure
-                title="View pricing guide"
-                variant="subtle"
-                isExpanded={isPricingGuideOpen}
-                onExpandedChange={setIsPricingGuideOpen}
-              >
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    {pricingGuideRows.map((row) => {
+              {/* Pricing guide — hidden for Apparel products */}
+              {product.category !== "Apparel" && <div style={{
+                display: "flex", flexDirection: "column", gap: "16px",
+                width: "100%",
+              }}>
+                <div style={{
+                  border: "1px solid var(--cim-border-subtle, #eaebeb)",
+                  borderRadius: "4px",
+                  overflow: "hidden",
+                  width: "100%",
+                }}>
+                  <div
+                    ref={pricingGuideScrollRef}
+                    style={{ maxHeight: "200px", overflowY: "auto", scrollbarWidth: "thin" }}
+                  >
+                    {sortedTiersAll.map((row) => {
                       const isSelected = pricingGuideSelected === row.qty;
                       const rowTotal = (row.qty * row.unitPrice).toFixed(2);
                       return (
                         <button
                           key={row.qty}
+                          ref={(el) => {
+                            if (el) pricingGuideRowRefs.current.set(row.qty, el);
+                            else pricingGuideRowRefs.current.delete(row.qty);
+                          }}
                           onClick={() => {
                             setPricingGuideSelected(row.qty);
                             setQuantityInput(String(row.qty));
                             handleQuantityChange(row.qty);
                           }}
                           style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "16px", borderRadius: "6px", width: "100%", cursor: "pointer",
+                            display: "flex", alignItems: "center",
+                            width: "100%", minHeight: "40px",
                             background: "white",
-                            border: isSelected
-                              ? "1.5px solid var(--cim-border-accent, #0091b8)"
-                              : "1px solid var(--cim-border-base, #dadcdd)",
-                            boxShadow: isSelected
-                              ? "0px 1px 1px 0px rgba(0,0,0,0.08), 0px 1px 3px 0px rgba(0,0,0,0.04)"
-                              : "none",
+                            border: "none",
+                            borderBottom: "1px solid var(--cim-border-base, #dadcdd)",
+                            cursor: "pointer",
+                            padding: 0,
+                            textAlign: "left",
                           }}
                         >
-                          {/* Left: qty + badge */}
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>{row.qty}</span>
-                            {row.recommended && <Badge tone="base">Recommended</Badge>}
+                          {/* Radio */}
+                          <div style={{
+                            width: "40px", minHeight: "40px",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                          }}>
+                            <div style={{
+                              width: "16px", height: "16px",
+                              borderRadius: "999px",
+                              border: isSelected
+                                ? "5px solid var(--cim-fg-base, #15191d)"
+                                : "1px solid var(--cim-fg-base, #15191d)",
+                              background: "white",
+                              boxSizing: "border-box",
+                              flexShrink: 0,
+                            }} />
                           </div>
-
-                          {/* Right: total + unit price */}
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
+                          {/* Qty */}
+                          <div style={{ flex: 1, padding: "0 12px", minWidth: 0 }}>
+                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "20px" }}>
+                              {row.qty}
+                            </span>
+                            {row.recommended && (
+                              <span style={{ marginLeft: "8px" }}><Badge tone="base">Recommended</Badge></span>
+                            )}
+                          </div>
+                          {/* Total price */}
+                          <div style={{ padding: "0 12px", flexShrink: 0 }}>
+                            <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", whiteSpace: "nowrap", lineHeight: "20px" }}>
                               {rowTotal} USD
                             </span>
-                            <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                              {row.unitPrice.toFixed(2)} USD / unit
+                          </div>
+                          {/* Unit price */}
+                          <div style={{ padding: "0 12px", flexShrink: 0 }}>
+                            <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)", whiteSpace: "nowrap", lineHeight: "16px" }}>
+                              {row.unitPrice.toFixed(2)} / unit
                             </span>
                           </div>
                         </button>
                       );
                     })}
-
-                    {/* View more quantities */}
-                    {!showAllTiers && sortedTiersAll.length > PRICING_GUIDE_VISIBLE && (
-                      <button
-                        onClick={() => setShowAllTiers(true)}
-                        style={{
-                          background: "none", border: "none", padding: 0,
-                          color: "var(--cim-fg-accent, #007798)", cursor: "pointer",
-                          textDecoration: "underline", fontSize: "1rem",
-                          alignSelf: "flex-start",
-                        }}
-                      >
-                        View more quantities
-                      </button>
-                    )}
                   </div>
-              </Disclosure>
+                </div>
+              </div>}
             </div>
           </div>
 
           {/* Item total row */}
-          <div style={{ ...sectionCard, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>Item total</span>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: "1.25rem", fontWeight: 600, color: quantityInput ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)" }}>
-                {quantityInput ? `${basePrice.toFixed(2)} USD` : "—"}
+          <div style={{ ...sectionCard, flexDirection: "column", gap: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+              <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>Item total</span>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
+                <span style={{ fontSize: "1.25rem", fontWeight: 600, color: quantityInput ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)" }}>
+                  {quantityInput ? `${basePrice.toFixed(2)} USD` : "—"}
+                </span>
+                {quantityInput && (
+                  <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                    {quantity} x {unitPrice.toFixed(2)} / unit
+                  </span>
+                )}
               </div>
-              {quantityInput && (
-                <div style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)", marginTop: "2px" }}>
-                  {quantity} x USD {unitPrice.toFixed(2)} / unit
-                </div>
+            </div>
+            {/* Upsell nudge — always visible; disabled when no qty or no next tier */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              background: "var(--cim-bg-subtle, #f8f9fa)",
+              borderRadius: "6px",
+              padding: "12px",
+            }}>
+              <Button
+                size="small"
+                isDisabled={!nextTier}
+                onPress={() => {
+                  if (!nextTier) return;
+                  // Only capture the original qty on the first upsell so Remove always reverts there
+                  if (!upsellApplied) setPreUpsellQuantity(quantity);
+                  setUpsellApplied(true);
+                  setQuantity(nextTier.minQty);
+                  setQuantityInput(String(nextTier.minQty));
+                  setUpsellInfo(computeUpsell(product, nextTier.minQty));
+                  setPricingGuideSelected(nextTier.minQty);
+                }}
+              >Add upsell</Button>
+              <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-base, #15191d)" }}>
+                {nextTier ? `${upsellUnits} more for ${upsellCost.toFixed(2)} USD` : "0 more for 0.00 USD"}
+              </span>
+              {/* Remove upsell link — right-aligned inside the nudge row */}
+              {upsellApplied && (
+                <button
+                  onClick={() => {
+                    const revertQty = preUpsellQuantity ?? 0;
+                    setUpsellApplied(false);
+                    setPreUpsellQuantity(null);
+                    setQuantityInput(revertQty > 0 ? String(revertQty) : "");
+                    if (revertQty > 0) {
+                      handleQuantityChange(revertQty);
+                      setPricingGuideSelected(revertQty);
+                    }
+                  }}
+                  style={{
+                    marginLeft: "auto",
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    fontSize: "0.875rem",
+                    color: "var(--cim-fg-critical, #d10023)",
+                    textDecoration: "underline",
+                    textUnderlineOffset: "2px",
+                    flexShrink: 0,
+                  }}
+                >
+                  Remove upsell
+                </button>
               )}
             </div>
           </div>
@@ -951,11 +1187,11 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
           </div>
 
           {/* Extra charges section — hidden from view */}
-          {false && product.extraCharges && product.extraCharges.length > 0 && (
+          {false && (product.extraCharges ?? []).length > 0 && (
             <div ref={extraChargesRef} style={{ position: "relative", border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", overflow: "hidden" }}>
               <Disclosure title="Extra charges" variant="subtle">
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", padding: "4px 16px 16px" }}>
-                  {product.extraCharges.map((charge) => {
+                  {(product.extraCharges ?? []).map((charge) => {
                     const isSelected = selectedChargeId === charge.id;
                     return (
                       <label

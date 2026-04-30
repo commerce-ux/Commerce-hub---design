@@ -123,6 +123,21 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
     }));
   }
 
+  function handleSizeQuantityChange(draftItemId: string, size: string, newQty: number) {
+    setItems((prev) => prev.map((i) => {
+      if (i.draftItemId !== draftItemId) return i;
+      const newSizeQuantities = { ...(i.sizeQuantities ?? {}), [size]: newQty };
+      const totalQty = Object.values(newSizeQuantities).reduce((sum, q) => sum + (q || 0), 0);
+      const tiers = i.product.pricingTiers;
+      const unitPrice = [...tiers].reverse().find((t) => totalQty >= t.minQty)?.unitPrice ?? tiers[0]?.unitPrice ?? 0;
+      const basePrice = unitPrice * totalQty * (1 - i.itemDiscount / 100);
+      const artworkCharge = i.artworkType !== "none" ? 10 : 0;
+      const accessoriesTotal = (i.accessories ?? []).reduce((sum, a) => sum + a.quantity * a.unitPrice, 0);
+      const lineTotal = parseFloat((basePrice + artworkCharge + accessoriesTotal).toFixed(2));
+      return { ...i, sizeQuantities: newSizeQuantities, quantity: totalQty, unitPrice, lineTotal };
+    }));
+  }
+
   function handleDiscountApplied(code: string, percent: number) {
     setDiscountCode(code);
     setOrderDiscount(percent);
@@ -215,6 +230,7 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
                 onRemoveItem={handleRemoveItem}
                 onDuplicateItem={handleDuplicateItem}
                 onQuantityChange={handleQuantityChangeItem}
+                onSizeQuantityChange={handleSizeQuantityChange}
                 onAccessoryRemove={handleAccessoryRemove}
                 editingItem={editingItem}
               />
