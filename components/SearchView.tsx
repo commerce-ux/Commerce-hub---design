@@ -11,7 +11,7 @@ import {
   IconChevronDown, IconArrowLeft, IconAddCircle, IconMenuMoreVertical,
 } from "@cimpress-ui/react/icons";
 import type { Key } from "@cimpress-ui/react";
-import { CUSTOMER_DATABASE } from "@/lib/createOrderMockData";
+import { CUSTOMER_DATABASE, getTotalOrders } from "@/lib/createOrderMockData";
 import type { Customer } from "@/lib/createOrderMockData";
 
 // Re-export for any legacy imports
@@ -367,7 +367,7 @@ export function SearchView({ onCustomerSelect }: SearchViewProps) {
                       </span>
                     </TableBodyCell>
                     <TableBodyCell columnKey="orders">
-                      <div style={{ textAlign: "right" }}>{c.orderCount}</div>
+                      <div style={{ textAlign: "right" }}>{getTotalOrders(c)}</div>
                     </TableBodyCell>
                     <TableBodyCell columnKey="actions">
                       <div style={{ display: "flex", gap: "4px", alignItems: "center", justifyContent: "flex-end" }}>
@@ -431,7 +431,7 @@ export function SearchView({ onCustomerSelect }: SearchViewProps) {
               </tr>
             </thead>
             <tbody>
-              {MOCK_ORDERS.slice(0, selectedCustomer.orderCount).map((order, i) => (
+              {MOCK_ORDERS.slice(0, getTotalOrders(selectedCustomer)).map((order, i) => (
                 <tr
                   key={`${order.id}-${i}`}
                   onClick={() => router.push(`/orders/${order.id}`)}

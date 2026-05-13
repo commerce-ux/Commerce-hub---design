@@ -5,7 +5,8 @@
       "name": "commerce-hub",
       "runtimeExecutable": "/usr/local/bin/node",
       "runtimeArgs": ["/Users/priyankaparab/Desktop/claude/commerce-hub/serve-static.js"],
-      "port": 3845
+      "port": 3845,
+      "autoPort": true
     }
   ]
 }
