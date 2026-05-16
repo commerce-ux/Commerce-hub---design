@@ -57,7 +57,7 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
     isDefault: preselectedAddressId ? addr.id === preselectedAddressId : idx === 0,
   }));
 
-  const [view, setView] = useState<"cart" | "add-item">("cart");
+  const [view, setView] = useState<"cart" | "add-item">("add-item");
   const [items, setItems] = useState<DraftOrderItem[]>([]);
   const [editingItem, setEditingItem] = useState<DraftOrderItem | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);

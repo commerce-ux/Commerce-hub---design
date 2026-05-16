@@ -95,17 +95,14 @@ export function AccessoryCard({ item, onAdd, isAdded = false, onRemove, mainItem
     if (!isAdded) setQty(0);
   }, [isAdded]);
 
-  // Accessory qty cannot exceed the main item's selected qty
-  const effectiveMax = mainItemQty > 0 ? Math.min(item.maxQty, mainItemQty) : 0;
-  const isQtyDisabled = mainItemQty === 0;
+  const effectiveMax = mainItemQty > 0 ? Math.min(item.maxQty, mainItemQty) : item.maxQty;
+  const isQtyDisabled = false;
 
   useEffect(() => {
     if (qty > effectiveMax) setQty(effectiveMax > 0 ? effectiveMax : 0);
   }, [effectiveMax, qty]);
 
-  const qtyOptions = effectiveMax > 0
-    ? generateQtyOptions(item.minQty, effectiveMax)
-    : [0];
+  const qtyOptions = generateQtyOptions(item.minQty, effectiveMax);
   const itemTotal = qty * item.unitPrice;
   const hasQty = qty > 0;
 
