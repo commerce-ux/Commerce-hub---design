@@ -363,16 +363,17 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const qtyInfoBtnRef = useRef<HTMLButtonElement>(null);
     const pricingGuideScrollRef = useRef<HTMLDivElement>(null);
     const pricingGuideRowRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
-    const [addedAccessories, setAddedAccessories] = useState<import("@/lib/types").DraftOrderItemAccessory[]>([]);
+    const [addedAccessories, setAddedAccessories] = useState<import("@/lib/types").DraftOrderItemAccessory[]>(initialValues?.accessories ?? []);
     const [showAllAccessories, setShowAllAccessories] = useState(false);
     const [isChargesExpanded, setIsChargesExpanded] = useState(false);
     const [isAccessoriesExpanded, setIsAccessoriesExpanded] = useState(false);
+    const initDiscount = initialValues?.itemDiscount ?? 0;
     const [newPriceInput, setNewPriceInput] = useState<string>("");
-    const [pctBasedInput, setPctBasedInput] = useState<string>("");
+    const [pctBasedInput, setPctBasedInput] = useState<string>(initDiscount > 0 ? String(initDiscount) : "");
     const [overrideReason, setOverrideReason] = useState<string>("");
-    const [offerDiscountPct, setOfferDiscountPct] = useState<number>(0);
+    const [offerDiscountPct, setOfferDiscountPct] = useState<number>(initDiscount);
     const [activeOfferType, setActiveOfferType] = useState<"pct" | "price">("pct");
-    const [savedOfferDiscountPct, setSavedOfferDiscountPct] = useState<number>(0);
+    const [savedOfferDiscountPct, setSavedOfferDiscountPct] = useState<number>(initDiscount);
     const [savedNewPriceInput, setSavedNewPriceInput] = useState<string>("");
 
     const unitPrice = resolvePricingTier(product.pricingTiers, quantity);
@@ -511,9 +512,17 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
       setArtworkFileName(initialValues?.artworkFileName ?? "");
       setSelectedChargeId(null);
       setPricingGuideSelected(null);
-      setAddedAccessories([]);
+      setAddedAccessories(initialValues?.accessories ?? []);
       setShowAllAccessories(false);
       setSizeQuantities(initialValues?.sizeQuantities ?? {});
+      const restoredDiscount = initialValues?.itemDiscount ?? 0;
+      setOfferDiscountPct(restoredDiscount);
+      setSavedOfferDiscountPct(restoredDiscount);
+      setPctBasedInput(restoredDiscount > 0 ? String(restoredDiscount) : "");
+      setNewPriceInput("");
+      setSavedNewPriceInput("");
+      setActiveOfferType("pct");
+      setOverrideReason("");
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [product.id]);
 
@@ -1433,15 +1442,17 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
               const hasCustomization =
                 (activeOfferType === "pct" && offerDiscountPct > 0) ||
                 (activeOfferType === "price" && newPriceValue > 0 && !newPriceInvalid);
-              const newItemPreTax = activeOfferType === "pct" && offerDiscountPct > 0
+              const discountedBase = activeOfferType === "pct" && offerDiscountPct > 0
                 ? basePrice * (1 - offerDiscountPct / 100)
                 : activeOfferType === "price" && newPriceValue > 0
                 ? newPriceValue
-                : 0;
+                : basePrice;
+              const newItemPreTax = discountedBase + extraChargesTotal + accessoriesTotal;
+              const baseItemPreTax = basePrice + extraChargesTotal + accessoriesTotal;
               const taxMult = 1 + taxRate / 100;
-              const basePriceWithTax = parseFloat((basePrice * taxMult).toFixed(2));
+              const basePriceWithTax = parseFloat((baseItemPreTax * taxMult).toFixed(2));
               const newItemTotal = parseFloat((newItemPreTax * taxMult).toFixed(2));
-              const savings = hasCustomization ? basePriceWithTax - newItemTotal : 0;
+              const savings = hasCustomization ? parseFloat((basePriceWithTax - newItemTotal).toFixed(2)) : 0;
               return (
                 <>
                   <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)", margin: "0 -12px" }} />

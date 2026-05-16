@@ -421,7 +421,7 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                                         <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>Item total</span>
                                         <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Tax {sizeTax.toFixed(2)} USD</span>
                                         <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", marginTop: "4px" }}>
-                                          {sizeLineTotal.toFixed(2)} USD
+                                          {(sizeLineTotal + sizeTax).toFixed(2)} USD
                                         </span>
                                         <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
                                           USD {item.unitPrice.toFixed(2)} / unit
@@ -461,7 +461,13 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
               }
 
               // ── Regular (non per-size) item card ───────────────────────────
-              const taxAmount = item.lineTotal * (taxRate / 100);
+              const taxAmount = parseFloat((item.lineTotal * (taxRate / 100)).toFixed(2));
+              const discountAmount = item.itemDiscount > 0
+                ? parseFloat((item.unitPrice * item.quantity * (item.itemDiscount / 100)).toFixed(2))
+                : 0;
+              const originalTotalWithTax = parseFloat(((item.lineTotal + discountAmount) * (1 + taxRate / 100)).toFixed(2));
+              const discountedTotalWithTax = parseFloat((item.lineTotal + taxAmount).toFixed(2));
+              const hasDiscount = item.itemDiscount > 0;
               const stockQty = item.product.stockQuantity;
               const attributes = item.selectedAttributes
                 .map((attr) => {
@@ -600,15 +606,29 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                           </div>
 
                           {/* Item total */}
-                          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", minWidth: "160px" }}>
+                          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "12px", minWidth: "160px" }}>
                             <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>Item total</span>
-                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Tax {taxAmount.toFixed(2)} USD</span>
-                            <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", marginTop: "4px" }}>
-                              {item.lineTotal.toFixed(2)} USD
-                            </span>
-                            <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                              USD {item.unitPrice.toFixed(2)} / unit
-                            </span>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", width: "100%" }}>
+                              <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Tax {taxAmount.toFixed(2)} USD</span>
+                              <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                                {hasDiscount && (
+                                  <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>
+                                    {originalTotalWithTax.toFixed(2)} USD
+                                  </span>
+                                )}
+                                <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
+                                  {discountedTotalWithTax.toFixed(2)} USD
+                                </span>
+                              </div>
+                              <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                                USD {item.unitPrice.toFixed(2)} / unit
+                              </span>
+                              {hasDiscount && (
+                                <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-success, #007e3f)" }}>
+                                  {parseFloat((originalTotalWithTax - discountedTotalWithTax).toFixed(2)).toFixed(2)} USD saving due to {item.itemDiscount}% discount
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -628,11 +648,6 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                             {item.artworkType !== "none" && item.artworkFileName && (
                               <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
                                 Artwork: {item.artworkFileName}
-                              </span>
-                            )}
-                            {item.itemDiscount > 0 && (
-                              <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-success, #15803d)", fontWeight: 500 }}>
-                                {item.itemDiscount}% item discount applied
                               </span>
                             )}
                           </div>
