@@ -383,6 +383,8 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [isPriceOverrideExpanded, setIsPriceOverrideExpanded] = useState(false);
     const [priceOverrideAccessoryPrices, setPriceOverrideAccessoryPrices] = useState<Record<string, string>>({});
     const [savedAccessoryOverridePrices, setSavedAccessoryOverridePrices] = useState<Record<string, number>>({});
+    const [priceOverrideQty, setPriceOverrideQty] = useState<string>("");
+    const [priceOverrideAccessoryQuantities, setPriceOverrideAccessoryQuantities] = useState<Record<string, string>>({});
 
     const unitPrice = resolvePricingTier(product.pricingTiers, quantity);
     // basePrice is 0 until the user has entered a quantity
@@ -1634,9 +1636,15 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
               <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                 <Button variant="secondary" size="small" onPress={() => {
                   if (savedPriceOverrideUnitPrice > 0) setPriceOverrideUnitPrice(savedPriceOverrideUnitPrice.toFixed(2));
+                  setPriceOverrideQty(quantity > 0 ? String(quantity) : "");
                   const initAcc: Record<string, string> = {};
-                  addedAccessories.forEach((a) => { initAcc[a.id] = (savedAccessoryOverridePrices[a.id] ?? a.unitPrice).toFixed(2); });
+                  const initAccQty: Record<string, string> = {};
+                  addedAccessories.forEach((a) => {
+                    initAcc[a.id] = (savedAccessoryOverridePrices[a.id] ?? a.unitPrice).toFixed(2);
+                    initAccQty[a.id] = String(a.quantity);
+                  });
                   setPriceOverrideAccessoryPrices(initAcc);
+                  setPriceOverrideAccessoryQuantities(initAccQty);
                   setIsPriceOverrideOpen(true);
                 }}>
                   Price override
@@ -1674,8 +1682,11 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
         {isPriceOverrideOpen && (() => {
           const overrideParsed = priceOverrideUnitPrice !== "" ? parseFloat(priceOverrideUnitPrice) : NaN;
           const overrideValid = !isNaN(overrideParsed) && overrideParsed >= 0;
-          const modalNewBase = overrideValid && quantity > 0 ? parseFloat((overrideParsed * quantity).toFixed(2)) : basePrice;
-          const modalDiscount = overrideValid && quantity > 0 ? parseFloat((basePrice - modalNewBase).toFixed(2)) : 0;
+          const modalQtyParsed = priceOverrideQty !== "" ? parseInt(priceOverrideQty, 10) : quantity;
+          const modalQty = !isNaN(modalQtyParsed) && modalQtyParsed > 0 ? modalQtyParsed : quantity;
+          const modalOrigBase = parseFloat((unitPrice * modalQty).toFixed(2));
+          const modalNewBase = overrideValid ? parseFloat((overrideParsed * modalQty).toFixed(2)) : modalOrigBase;
+          const modalDiscount = overrideValid ? parseFloat((modalOrigBase - modalNewBase).toFixed(2)) : 0;
           const hasModalCustomization = overrideValid && overrideParsed !== unitPrice;
           return (
             <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1705,9 +1716,15 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                         {/* Quantity */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                           <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Quantity</label>
-                          <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "80px", display: "flex", alignItems: "center", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                            {quantity}
-                          </div>
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={priceOverrideQty}
+                            onChange={(e) => setPriceOverrideQty(e.target.value)}
+                            placeholder={String(quantity)}
+                            style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", fontSize: "1rem", minHeight: "40px", minWidth: "90px", outline: "none", fontFamily: "inherit", color: "var(--cim-fg-base, #15191d)" }}
+                          />
                         </div>
                         {/* Unit price */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -1728,7 +1745,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                           <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Packaged price</label>
                           <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "130px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                            <span>{overrideValid ? modalNewBase.toFixed(2) : basePrice.toFixed(2)}</span>
+                            <span>{modalNewBase.toFixed(2)}</span>
                             <span style={{ color: "var(--cim-fg-subtle, #5f6469)", fontSize: "0.875rem" }}>USD</span>
                           </div>
                         </div>
@@ -1747,10 +1764,14 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                   {addedAccessories.map((acc) => {
                     const accCatalog = MOCK_ACCESSORIES.find((m) => m.id === acc.id);
                     const accInputPrice = priceOverrideAccessoryPrices[acc.id] ?? "";
+                    const accInputQty = priceOverrideAccessoryQuantities[acc.id] ?? String(acc.quantity);
                     const accParsed = accInputPrice !== "" ? parseFloat(accInputPrice) : NaN;
+                    const accQtyParsed = parseInt(accInputQty, 10);
+                    const accQty = !isNaN(accQtyParsed) && accQtyParsed > 0 ? accQtyParsed : acc.quantity;
                     const accValid = !isNaN(accParsed) && accParsed >= 0;
-                    const accPackaged = accValid ? parseFloat((accParsed * acc.quantity).toFixed(2)) : parseFloat((acc.unitPrice * acc.quantity).toFixed(2));
-                    const accDiscount = accValid ? parseFloat((acc.unitPrice * acc.quantity - accPackaged).toFixed(2)) : 0;
+                    const accOrigPackaged = parseFloat((acc.unitPrice * accQty).toFixed(2));
+                    const accPackaged = accValid ? parseFloat((accParsed * accQty).toFixed(2)) : accOrigPackaged;
+                    const accDiscount = accValid ? parseFloat((accOrigPackaged - accPackaged).toFixed(2)) : 0;
                     return (
                       <div key={acc.id}>
                         <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)", margin: "0 0 24px" }} />
@@ -1769,9 +1790,15 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                             <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginTop: "12px", flexWrap: "wrap" }}>
                               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                 <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Quantity</label>
-                                <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "80px", display: "flex", alignItems: "center", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                                  {acc.quantity}
-                                </div>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  value={accInputQty}
+                                  onChange={(e) => setPriceOverrideAccessoryQuantities((prev) => ({ ...prev, [acc.id]: e.target.value }))}
+                                  placeholder={String(acc.quantity)}
+                                  style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", fontSize: "1rem", minHeight: "40px", minWidth: "90px", outline: "none", fontFamily: "inherit", color: "var(--cim-fg-base, #15191d)" }}
+                                />
                               </div>
                               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                 <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Unit price</label>
