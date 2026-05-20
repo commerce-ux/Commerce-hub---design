@@ -381,6 +381,8 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [priceOverrideReason, setPriceOverrideReason] = useState<string>("");
     const [savedPriceOverrideUnitPrice, setSavedPriceOverrideUnitPrice] = useState<number>(0);
     const [isPriceOverrideExpanded, setIsPriceOverrideExpanded] = useState(false);
+    const [priceOverrideAccessoryPrices, setPriceOverrideAccessoryPrices] = useState<Record<string, string>>({});
+    const [savedAccessoryOverridePrices, setSavedAccessoryOverridePrices] = useState<Record<string, number>>({});
 
     const unitPrice = resolvePricingTier(product.pricingTiers, quantity);
     // basePrice is 0 until the user has entered a quantity
@@ -442,7 +444,10 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const artworkCharge = artworkOption !== null ? 10 : 0;
     const extraChargesTotal = parseFloat(((selectedCharge?.unitPrice ?? 0) + artworkCharge).toFixed(2));
     const chargesApplied = (selectedCharge ? 1 : 0) + (artworkOption !== null ? 1 : 0);
-    const accessoriesTotal = parseFloat(addedAccessories.reduce((sum, a) => sum + a.quantity * a.unitPrice, 0).toFixed(2));
+    const accessoriesTotal = parseFloat(addedAccessories.reduce((sum, a) => {
+      const price = savedAccessoryOverridePrices[a.id] ?? a.unitPrice;
+      return sum + a.quantity * price;
+    }, 0).toFixed(2));
     const newPriceParsed = newPriceInput !== "" ? parseFloat(newPriceInput) : NaN;
     const newPriceValid = !isNaN(newPriceParsed) && newPriceParsed >= 0 && (basePrice === 0 || newPriceParsed <= basePrice);
     const newPriceInvalid = newPriceInput !== "" && !isNaN(newPriceParsed) && basePrice > 0 && newPriceParsed > basePrice;
@@ -537,6 +542,8 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
       setSavedPriceOverrideUnitPrice(0);
       setPriceOverrideUnitPrice("");
       setPriceOverrideReason("");
+      setPriceOverrideAccessoryPrices({});
+      setSavedAccessoryOverridePrices({});
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [product.id]);
 
@@ -1485,7 +1492,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                         </span>
                       </button>
                       <button
-                        onClick={() => { setSavedPriceOverrideUnitPrice(0); setPriceOverrideUnitPrice(""); setPriceOverrideReason(""); }}
+                        onClick={() => { setSavedPriceOverrideUnitPrice(0); setPriceOverrideUnitPrice(""); setPriceOverrideReason(""); setSavedAccessoryOverridePrices({}); setPriceOverrideAccessoryPrices({}); }}
                         style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
                       >
                         Remove
@@ -1627,6 +1634,9 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
               <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                 <Button variant="secondary" size="small" onPress={() => {
                   if (savedPriceOverrideUnitPrice > 0) setPriceOverrideUnitPrice(savedPriceOverrideUnitPrice.toFixed(2));
+                  const initAcc: Record<string, string> = {};
+                  addedAccessories.forEach((a) => { initAcc[a.id] = (savedAccessoryOverridePrices[a.id] ?? a.unitPrice).toFixed(2); });
+                  setPriceOverrideAccessoryPrices(initAcc);
                   setIsPriceOverrideOpen(true);
                 }}>
                   Price override
@@ -1733,6 +1743,70 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                       </div>
                     </div>
                   </div>
+                  {/* Accessory rows */}
+                  {addedAccessories.map((acc) => {
+                    const accCatalog = MOCK_ACCESSORIES.find((m) => m.id === acc.id);
+                    const accInputPrice = priceOverrideAccessoryPrices[acc.id] ?? "";
+                    const accParsed = accInputPrice !== "" ? parseFloat(accInputPrice) : NaN;
+                    const accValid = !isNaN(accParsed) && accParsed >= 0;
+                    const accPackaged = accValid ? parseFloat((accParsed * acc.quantity).toFixed(2)) : parseFloat((acc.unitPrice * acc.quantity).toFixed(2));
+                    const accDiscount = accValid ? parseFloat((acc.unitPrice * acc.quantity - accPackaged).toFixed(2)) : 0;
+                    return (
+                      <div key={acc.id}>
+                        <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)", margin: "0 0 24px" }} />
+                        <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+                          <div style={{ width: "120px", height: "96px", borderRadius: "6px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0, border: "1px solid var(--cim-border-base, #dadcdd)" }}>
+                            {accCatalog?.imageUrl && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={accCatalog.imageUrl} alt={acc.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            )}
+                          </div>
+                          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <p style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--cim-fg-base, #15191d)" }}>{acc.label}</p>
+                            <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                              {parseFloat((acc.unitPrice * acc.quantity).toFixed(2)).toFixed(2)} USD ({acc.quantity} qty × {acc.unitPrice.toFixed(2)}/unit)
+                            </p>
+                            <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginTop: "12px", flexWrap: "wrap" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Quantity</label>
+                                <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "80px", display: "flex", alignItems: "center", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                                  {acc.quantity}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Unit price</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={0.01}
+                                  value={accInputPrice}
+                                  onChange={(e) => setPriceOverrideAccessoryPrices((prev) => ({ ...prev, [acc.id]: e.target.value }))}
+                                  placeholder={acc.unitPrice.toFixed(2)}
+                                  style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", fontSize: "1rem", minHeight: "40px", minWidth: "110px", outline: "none", fontFamily: "inherit", color: "var(--cim-fg-base, #15191d)" }}
+                                />
+                              </div>
+                              <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", paddingBottom: "8px" }}>=</span>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Packaged price</label>
+                                <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "130px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                                  <span>{accPackaged.toFixed(2)}</span>
+                                  <span style={{ color: "var(--cim-fg-subtle, #5f6469)", fontSize: "0.875rem" }}>USD</span>
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Discount</label>
+                                <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "110px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                                  <span>{accDiscount > 0 ? accDiscount.toFixed(2) : "0.00"}</span>
+                                  <span style={{ color: "var(--cim-fg-subtle, #5f6469)", fontSize: "0.875rem" }}>USD</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
                   {/* Reason */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                     <div style={{ display: "flex", gap: "4px", fontSize: "0.875rem", alignItems: "center" }}>
@@ -1782,6 +1856,13 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                       isDisabled={!overrideValid || !priceOverrideReason.trim()}
                       onPress={() => {
                         setSavedPriceOverrideUnitPrice(overrideParsed);
+                        // Save accessory override prices
+                        const newAccPrices: Record<string, number> = {};
+                        addedAccessories.forEach((a) => {
+                          const p = parseFloat(priceOverrideAccessoryPrices[a.id] ?? "");
+                          if (!isNaN(p) && p >= 0) newAccPrices[a.id] = p;
+                        });
+                        setSavedAccessoryOverridePrices(newAccPrices);
                         // Clear pct discount when price override is confirmed
                         setSavedOfferDiscountPct(0);
                         setOfferDiscountPct(0);
