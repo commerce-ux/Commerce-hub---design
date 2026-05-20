@@ -1533,7 +1533,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                         setPctBasedInput("");
                         setNewPriceInput("");
                       }}
-                      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
+                      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
                     >
                       Remove
                     </button>
