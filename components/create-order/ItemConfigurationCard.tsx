@@ -3,7 +3,7 @@
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef, useCallback } from "react";
 import { Button, Select, SelectItem, TextField, Disclosure, Badge, Tooltip, RadioGroup, Radio } from "@cimpress-ui/react";
 import { IconChevronDownBold } from "@cimpress-ui/react/icons";
-import { IconInfoCircle, IconCheckCircleFill, IconChevronRight, IconTrash } from "@cimpress-ui/react/icons";
+import { IconInfoCircle, IconCheckCircleFill, IconChevronDown, IconTrash } from "@cimpress-ui/react/icons";
 import type { ProductCatalogItem, DraftOrderItem, DraftOrderItemAttribute, QuantityPricingTier } from "@/lib/types";
 import { resolvePricingTier as resolveTier, computeIncrementRanges, generateGuideQuantities } from "@/lib/pricingUtils";
 import { PreviousArtworkModal } from "./PreviousArtworkModal";
@@ -1495,13 +1495,13 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                         style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}
                       >
                         Total charges applied ({chargesApplied})
-                        <span style={{ display: "flex", color: "var(--cim-fg-subtle, #5f6469)", transform: isChargesExpanded ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform 0.15s" }}>
-                          <IconChevronRight size={16} />
+                        <span style={{ display: "flex", color: "var(--cim-fg-subtle, #5f6469)", transform: isChargesExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>
+                          <IconChevronDown size={16} />
                         </span>
                       </button>
                       <button
                         onClick={() => { setSelectedChargeId(null); setArtworkOption(null); setArtworkFileName(""); }}
-                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
+                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
                       >
                         Remove
                       </button>
@@ -1529,13 +1529,13 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                         style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}
                       >
                         Accessory added ({addedAccessories.length})
-                        <span style={{ display: "flex", color: "var(--cim-fg-subtle, #5f6469)", transform: isAccessoriesExpanded ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform 0.15s" }}>
-                          <IconChevronRight size={16} />
+                        <span style={{ display: "flex", color: "var(--cim-fg-subtle, #5f6469)", transform: isAccessoriesExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>
+                          <IconChevronDown size={16} />
                         </span>
                       </button>
                       <button
                         onClick={() => setAddedAccessories([])}
-                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
+                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
                       >
                         Remove
                       </button>
@@ -1570,10 +1570,10 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
               {/* Action buttons */}
               <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                 <Button variant="secondary" size="small" onPress={() => customiseOfferRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })}>
-                  Apply discount
+                  Price override
                 </Button>
                 <Button variant="secondary" size="small" onPress={() => scrollToSection("Extra charges")}>
-                  Edit or remove charges
+                  Edit applied charges
                 </Button>
               </div>
 
