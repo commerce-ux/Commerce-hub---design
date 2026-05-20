@@ -1488,18 +1488,26 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
               {/* Total charges applied — collapsible, only shown when at least one charge applies */}
               {chargesApplied > 0 && (
                 <div>
-                  <button
-                    onClick={() => setIsChargesExpanded((v) => !v)}
-                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}
-                  >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      Total charges applied ({chargesApplied})
-                      <span style={{ display: "flex", color: "var(--cim-fg-subtle, #5f6469)", transform: isChargesExpanded ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform 0.15s" }}>
-                        <IconChevronRight size={16} />
-                      </span>
+                      <button
+                        onClick={() => setIsChargesExpanded((v) => !v)}
+                        style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}
+                      >
+                        Total charges applied ({chargesApplied})
+                        <span style={{ display: "flex", color: "var(--cim-fg-subtle, #5f6469)", transform: isChargesExpanded ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform 0.15s" }}>
+                          <IconChevronRight size={16} />
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => { setSelectedChargeId(null); setArtworkOption(null); setArtworkFileName(""); }}
+                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
+                      >
+                        Remove
+                      </button>
                     </span>
                     <span>{extraChargesTotal.toFixed(2)} USD</span>
-                  </button>
+                  </div>
                   {isChargesExpanded && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "6px", paddingLeft: "12px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
