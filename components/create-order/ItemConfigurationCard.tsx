@@ -376,6 +376,11 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [activeOfferType, setActiveOfferType] = useState<"pct" | "price">("pct");
     const [savedOfferDiscountPct, setSavedOfferDiscountPct] = useState<number>(initDiscount);
     const [savedNewPriceInput, setSavedNewPriceInput] = useState<string>("");
+    const [isPriceOverrideOpen, setIsPriceOverrideOpen] = useState(false);
+    const [priceOverrideUnitPrice, setPriceOverrideUnitPrice] = useState<string>("");
+    const [priceOverrideReason, setPriceOverrideReason] = useState<string>("");
+    const [savedPriceOverrideUnitPrice, setSavedPriceOverrideUnitPrice] = useState<number>(0);
+    const [isPriceOverrideExpanded, setIsPriceOverrideExpanded] = useState(false);
 
     const unitPrice = resolvePricingTier(product.pricingTiers, quantity);
     // basePrice is 0 until the user has entered a quantity
@@ -443,9 +448,14 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const newPriceInvalid = newPriceInput !== "" && !isNaN(newPriceParsed) && basePrice > 0 && newPriceParsed > basePrice;
     const savedNewPriceParsed = savedNewPriceInput !== "" ? parseFloat(savedNewPriceInput) : NaN;
     const savedNewPriceValid = !isNaN(savedNewPriceParsed) && savedNewPriceParsed >= 0 && (basePrice === 0 || savedNewPriceParsed <= basePrice);
-    const discountAmount = savedNewPriceValid && savedNewPriceInput !== ""
-      ? parseFloat((basePrice - savedNewPriceParsed).toFixed(2))
-      : (savedOfferDiscountPct > 0 ? parseFloat((basePrice * savedOfferDiscountPct / 100).toFixed(2)) : 0);
+    const priceOverrideDiscountAmount = savedPriceOverrideUnitPrice > 0 && quantity > 0
+      ? parseFloat((basePrice - savedPriceOverrideUnitPrice * quantity).toFixed(2))
+      : 0;
+    const discountAmount = priceOverrideDiscountAmount > 0
+      ? priceOverrideDiscountAmount
+      : (savedNewPriceValid && savedNewPriceInput !== ""
+        ? parseFloat((basePrice - savedNewPriceParsed).toFixed(2))
+        : (savedOfferDiscountPct > 0 ? parseFloat((basePrice * savedOfferDiscountPct / 100).toFixed(2)) : 0));
     const subtotal = parseFloat((basePrice - discountAmount + extraChargesTotal + accessoriesTotal).toFixed(2));
     const taxRate = product.taxRate ?? 8;
     const tax = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
@@ -524,6 +534,9 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
       setSavedNewPriceInput("");
       setActiveOfferType("pct");
       setOverrideReason("");
+      setSavedPriceOverrideUnitPrice(0);
+      setPriceOverrideUnitPrice("");
+      setPriceOverrideReason("");
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [product.id]);
 
@@ -1449,20 +1462,55 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
 
               {/* Base price */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                <span>Price</span>
+                <span>
+                  Price{savedPriceOverrideUnitPrice > 0 && quantity > 0
+                    ? ` (${quantity} qty × ${unitPrice.toFixed(2)} unit)`
+                    : ""}
+                </span>
                 <span>{basePrice.toFixed(2)} USD</span>
               </div>
 
-              {/* Selected extra charge — shown as its own direct line */}
-              {selectedCharge && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                  <span>{selectedCharge.label}</span>
-                  <span>{selectedCharge.unitPrice.toFixed(2)} USD</span>
+              {/* Price override row — shown when a price override has been confirmed */}
+              {priceOverrideDiscountAmount > 0 && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <button
+                        onClick={() => setIsPriceOverrideExpanded((v) => !v)}
+                        style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}
+                      >
+                        Price override
+                        <span style={{ display: "flex", color: "var(--cim-fg-subtle, #5f6469)", transform: isPriceOverrideExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>
+                          <IconChevronDown size={16} />
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => { setSavedPriceOverrideUnitPrice(0); setPriceOverrideUnitPrice(""); setPriceOverrideReason(""); }}
+                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
+                      >
+                        Remove
+                      </button>
+                    </span>
+                    <span style={{ color: "var(--cim-fg-success, #007e3f)" }}>-{priceOverrideDiscountAmount.toFixed(2)} USD</span>
+                  </div>
+                  {isPriceOverrideExpanded && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "6px", paddingLeft: "12px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                        <span>Override unit price</span>
+                        <span>{savedPriceOverrideUnitPrice.toFixed(2)} USD / unit</span>
+                      </div>
+                      {priceOverrideReason && (
+                        <div style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                          Reason: {priceOverrideReason}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Customized offer — only shown when a discount has been saved */}
-              {discountAmount > 0 && (
+              {/* Customized offer — only shown when a pct discount has been saved (no price override active) */}
+              {discountAmount > 0 && priceOverrideDiscountAmount === 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     {savedNewPriceValid && savedNewPriceInput !== ""
@@ -1482,6 +1530,14 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                     </button>
                   </span>
                   <span>- {discountAmount.toFixed(2)} USD</span>
+                </div>
+              )}
+
+              {/* Selected extra charge — shown as its own direct line */}
+              {selectedCharge && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                  <span>{selectedCharge.label}</span>
+                  <span>{selectedCharge.unitPrice.toFixed(2)} USD</span>
                 </div>
               )}
 
@@ -1569,13 +1625,24 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
 
               {/* Action buttons */}
               <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                <Button variant="secondary" size="small" onPress={() => customiseOfferRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })}>
+                <Button variant="secondary" size="small" onPress={() => {
+                  if (savedPriceOverrideUnitPrice > 0) setPriceOverrideUnitPrice(savedPriceOverrideUnitPrice.toFixed(2));
+                  setIsPriceOverrideOpen(true);
+                }}>
                   Price override
                 </Button>
                 <Button variant="secondary" size="small" onPress={() => scrollToSection("Extra charges")}>
                   Edit applied charges
                 </Button>
               </div>
+
+              {/* Admin approval warning — shown when price override is active */}
+              {priceOverrideDiscountAmount > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", border: "1px solid #f59e0b", borderRadius: "6px", padding: "12px 16px" }}>
+                  <span style={{ color: "#f59e0b", fontSize: "1.125rem", flexShrink: 0 }}>⚠</span>
+                  <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>This price will require admin approval</span>
+                </div>
+              )}
 
               {/* Divider */}
               <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)" }} />
@@ -1592,6 +1659,145 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
           </div>
 
         </div>
+
+        {/* Price Override Modal */}
+        {isPriceOverrideOpen && (() => {
+          const overrideParsed = priceOverrideUnitPrice !== "" ? parseFloat(priceOverrideUnitPrice) : NaN;
+          const overrideValid = !isNaN(overrideParsed) && overrideParsed >= 0;
+          const modalNewBase = overrideValid && quantity > 0 ? parseFloat((overrideParsed * quantity).toFixed(2)) : basePrice;
+          const modalDiscount = overrideValid && quantity > 0 ? parseFloat((basePrice - modalNewBase).toFixed(2)) : 0;
+          const hasModalCustomization = overrideValid && overrideParsed !== unitPrice;
+          return (
+            <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ background: "white", borderRadius: "8px", width: "min(90vw, 760px)", maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+                {/* Header */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", borderBottom: "1px solid var(--cim-border-base, #dadcdd)" }}>
+                  <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>Price override</span>
+                  <button onClick={() => setIsPriceOverrideOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1.375rem", color: "var(--cim-fg-base, #15191d)", lineHeight: 1, display: "flex", alignItems: "center", padding: "4px" }}>×</button>
+                </div>
+                {/* Body */}
+                <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "24px" }}>
+                  {/* Product row */}
+                  <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+                    <div style={{ width: "120px", height: "96px", borderRadius: "6px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0, border: "1px solid var(--cim-border-base, #dadcdd)" }}>
+                      {product.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={product.imageUrl} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      )}
+                    </div>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <p style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--cim-fg-base, #15191d)" }}>{product.name}</p>
+                      <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                        {basePrice.toFixed(2)} USD ({quantity} qty × {unitPrice.toFixed(2)}/unit)
+                      </p>
+                      {/* Fields */}
+                      <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginTop: "12px", flexWrap: "wrap" }}>
+                        {/* Quantity */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Quantity</label>
+                          <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "80px", display: "flex", alignItems: "center", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                            {quantity}
+                          </div>
+                        </div>
+                        {/* Unit price */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Unit price</label>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={priceOverrideUnitPrice}
+                            onChange={(e) => setPriceOverrideUnitPrice(e.target.value)}
+                            placeholder={unitPrice.toFixed(2)}
+                            style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", fontSize: "1rem", minHeight: "40px", minWidth: "110px", outline: "none", fontFamily: "inherit", color: "var(--cim-fg-base, #15191d)" }}
+                          />
+                        </div>
+                        {/* = */}
+                        <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", paddingBottom: "8px" }}>=</span>
+                        {/* Packaged price */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Packaged price</label>
+                          <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "130px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                            <span>{overrideValid ? modalNewBase.toFixed(2) : basePrice.toFixed(2)}</span>
+                            <span style={{ color: "var(--cim-fg-subtle, #5f6469)", fontSize: "0.875rem" }}>USD</span>
+                          </div>
+                        </div>
+                        {/* Discount */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Discount</label>
+                          <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "110px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                            <span>{modalDiscount > 0 ? modalDiscount.toFixed(2) : "0.00"}</span>
+                            <span style={{ color: "var(--cim-fg-subtle, #5f6469)", fontSize: "0.875rem" }}>USD</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Reason */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <div style={{ display: "flex", gap: "4px", fontSize: "0.875rem", alignItems: "center" }}>
+                      <span style={{ color: "var(--cim-fg-base, #15191d)" }}>Reason for price override</span>
+                      <span style={{ color: "var(--cim-fg-critical, #d10023)" }}>*</span>
+                    </div>
+                    <textarea
+                      value={priceOverrideReason}
+                      onChange={(e) => setPriceOverrideReason(e.target.value)}
+                      placeholder="Write here..."
+                      rows={3}
+                      style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "12px", fontSize: "1rem", resize: "vertical", outline: "none", fontFamily: "inherit", color: "var(--cim-fg-base, #15191d)", lineHeight: 1.5 }}
+                    />
+                  </div>
+                  {/* Warning banner */}
+                  {modalDiscount > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px", border: "1px solid #f59e0b", borderRadius: "6px", padding: "12px 16px" }}>
+                      <span style={{ color: "#f59e0b", fontSize: "1.125rem", flexShrink: 0 }}>⚠</span>
+                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>This price will require admin approval</span>
+                    </div>
+                  )}
+                </div>
+                {/* Footer */}
+                <div style={{ borderTop: "1px solid var(--cim-border-base, #dadcdd)", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-muted, #94979b)" }}>new item total</span>
+                    {hasModalCustomization ? (
+                      <>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                          <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{basePrice.toFixed(2)} USD</span>
+                          <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{modalNewBase.toFixed(2)} USD</span>
+                        </div>
+                        {modalDiscount > 0 && (
+                          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-success, #007e3f)" }}>{modalDiscount.toFixed(2)} USD in savings due to price override</span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-muted, #94979b)" }}>0.00 USD</span>
+                        <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-muted, #94979b)" }}>No price customization selected</span>
+                      </>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "12px", flexShrink: 0 }}>
+                    <Button variant="secondary" onPress={() => setIsPriceOverrideOpen(false)}>Cancel</Button>
+                    <Button
+                      isDisabled={!overrideValid || !priceOverrideReason.trim()}
+                      onPress={() => {
+                        setSavedPriceOverrideUnitPrice(overrideParsed);
+                        // Clear pct discount when price override is confirmed
+                        setSavedOfferDiscountPct(0);
+                        setOfferDiscountPct(0);
+                        setPctBasedInput("");
+                        setOverrideReason("");
+                        setIsPriceOverrideOpen(false);
+                      }}
+                    >
+                      Confirm
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {isArtworkModalOpen && (
           <PreviousArtworkModal
