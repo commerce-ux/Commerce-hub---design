@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef, useCallback } from "react";
-import { Button, Select, SelectItem, TextField, TextArea, Disclosure, Badge, Tooltip, RadioGroup, Radio } from "@cimpress-ui/react";
+import { Button, Select, SelectItem, TextField, TextArea, Checkbox, Disclosure, Badge, Tooltip, RadioGroup, Radio } from "@cimpress-ui/react";
 import { IconChevronDownBold } from "@cimpress-ui/react/icons";
 import { IconInfoCircle, IconCheckCircleFill, IconChevronDown, IconTrash, IconCloseBold } from "@cimpress-ui/react/icons";
 import type { ProductCatalogItem, DraftOrderItem, DraftOrderItemAttribute, QuantityPricingTier } from "@/lib/types";
@@ -385,6 +385,10 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [savedAccessoryOverridePrices, setSavedAccessoryOverridePrices] = useState<Record<string, number>>({});
     const [priceOverrideQty, setPriceOverrideQty] = useState<string>("");
     const [priceOverrideAccessoryQuantities, setPriceOverrideAccessoryQuantities] = useState<Record<string, string>>({});
+    const [isEditChargesOpen, setIsEditChargesOpen] = useState(false);
+    const [savedWaivedChargeIds, setSavedWaivedChargeIds] = useState<string[]>([]);
+    const [modalWaivedIds, setModalWaivedIds] = useState<string[]>([]);
+    const [waiveReason, setWaiveReason] = useState<string>("");
 
     const unitPrice = resolvePricingTier(product.pricingTiers, quantity);
     // basePrice is 0 until the user has entered a quantity
@@ -444,7 +448,11 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const selectedCharge = (product.extraCharges ?? []).find((c) => c.id === selectedChargeId);
     // Artwork charge only applies once the user has selected an artwork option
     const artworkCharge = artworkOption !== null ? 10 : 0;
-    const extraChargesTotal = parseFloat(((selectedCharge?.unitPrice ?? 0) + artworkCharge).toFixed(2));
+    const allExtraCharges = product.extraCharges ?? [];
+    const waivedChargesTotal = parseFloat(allExtraCharges
+      .filter((c) => savedWaivedChargeIds.includes(c.id))
+      .reduce((sum, c) => sum + c.unitPrice, 0).toFixed(2));
+    const extraChargesTotal = parseFloat(((selectedCharge?.unitPrice ?? 0) + artworkCharge - waivedChargesTotal).toFixed(2));
     const chargesApplied = (selectedCharge ? 1 : 0) + (artworkOption !== null ? 1 : 0);
     const accessoriesTotal = parseFloat(addedAccessories.reduce((sum, a) => {
       const price = savedAccessoryOverridePrices[a.id] ?? a.unitPrice;
@@ -1289,7 +1297,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
             const visibleAccessories = showAllAccessories ? MOCK_ACCESSORIES : MOCK_ACCESSORIES.slice(0, 3);
             return (
               <div ref={addOnsRef} style={{ position: "relative", border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", overflow: "hidden" }}>
-                <Disclosure title="Add accessory" variant="subtle" defaultExpanded>
+                <Disclosure title="Add accessory" variant="subtle">
                   <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "4px 16px 16px" }}>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
                       {visibleAccessories.map((acc) => {
@@ -1635,12 +1643,13 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
               {/* Action buttons */}
               <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                 <Button variant="secondary" size="small" onPress={() => {
-                  if (savedPriceOverrideUnitPrice > 0) setPriceOverrideUnitPrice(savedPriceOverrideUnitPrice.toFixed(2));
+                  setPriceOverrideUnitPrice(unitPrice.toFixed(2));
                   setPriceOverrideQty(quantity > 0 ? String(quantity) : "");
+                  setPriceOverrideReason("");
                   const initAcc: Record<string, string> = {};
                   const initAccQty: Record<string, string> = {};
                   addedAccessories.forEach((a) => {
-                    initAcc[a.id] = (savedAccessoryOverridePrices[a.id] ?? a.unitPrice).toFixed(2);
+                    initAcc[a.id] = a.unitPrice.toFixed(2);
                     initAccQty[a.id] = String(a.quantity);
                   });
                   setPriceOverrideAccessoryPrices(initAcc);
@@ -1649,7 +1658,11 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                 }}>
                   Price override
                 </Button>
-                <Button variant="secondary" size="small" onPress={() => scrollToSection("Extra charges")}>
+                <Button variant="secondary" size="small" onPress={() => {
+                  setModalWaivedIds([...savedWaivedChargeIds]);
+                  setWaiveReason("");
+                  setIsEditChargesOpen(true);
+                }}>
                   Edit applied charges
                 </Button>
               </div>
@@ -1678,16 +1691,120 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
 
         </div>
 
+        {/* Edit Applied Charges Modal */}
+        {isEditChargesOpen && (() => {
+          const allCharges = product.extraCharges ?? [];
+          const allWaived = allCharges.length > 0 && allCharges.every((c) => modalWaivedIds.includes(c.id));
+          const someWaived = !allWaived && allCharges.some((c) => modalWaivedIds.includes(c.id));
+          const waivedTotal = parseFloat(allCharges.filter((c) => modalWaivedIds.includes(c.id)).reduce((sum, c) => sum + c.unitPrice, 0).toFixed(2));
+          const currentTotal = parseFloat((basePrice - discountAmount + extraChargesTotal + accessoriesTotal).toFixed(2));
+          const newTotal = parseFloat((currentTotal + waivedChargesTotal - waivedTotal).toFixed(2));
+          const savings = parseFloat((waivedTotal - waivedChargesTotal).toFixed(2));
+          const hasChange = waivedTotal !== waivedChargesTotal;
+          return (
+            <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "64px" }}>
+              <div style={{ background: "white", borderRadius: "8px", width: "min(100%, 864px)", maxHeight: "calc(100vh - 128px)", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0px 2px 8px rgba(0,0,0,0.12), 0px 8px 16px rgba(0,0,0,0.11), 0px 16px 24px rgba(0,0,0,0.10), 0px 16px 32px rgba(0,0,0,0.09), 0px 24px 48px rgba(0,0,0,0.08)" }}>
+                {/* Header */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "24px 24px 16px", borderBottom: "1px solid var(--cim-border-base, #dadcdd)" }}>
+                  <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>Edit applied charges</span>
+                  <button onClick={() => setIsEditChargesOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cim-fg-base, #15191d)", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, width: "32px", height: "32px", borderRadius: "4px" }}>
+                    <IconCloseBold size={16} />
+                  </button>
+                </div>
+                {/* Body */}
+                <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "0 16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "24px", padding: "16px 0" }}>
+                    {/* Checkboxes */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px", borderRadius: "6px" }}>
+                      <Checkbox
+                        isIndeterminate={someWaived}
+                        isSelected={allWaived}
+                        onChange={(checked) => {
+                          setModalWaivedIds(checked ? allCharges.map((c) => c.id) : []);
+                        }}
+                      >
+                        Select all charges
+                      </Checkbox>
+                      {allCharges.map((charge) => (
+                        <Checkbox
+                          key={charge.id}
+                          isSelected={modalWaivedIds.includes(charge.id)}
+                          onChange={(checked) => {
+                            setModalWaivedIds((prev) =>
+                              checked ? [...prev, charge.id] : prev.filter((id) => id !== charge.id)
+                            );
+                          }}
+                        >
+                          {charge.label} ({charge.unitPrice.toFixed(2)} USD)
+                        </Checkbox>
+                      ))}
+                    </div>
+                    {/* Reason */}
+                    <Select
+                      label="Reason for waiving off charge"
+                      isRequired
+                      selectedKey={waiveReason || null}
+                      onSelectionChange={(key) => setWaiveReason(String(key))}
+                      placeholder="Select a reason..."
+                    >
+                      <SelectItem id="customer-goodwill">Customer goodwill gesture</SelectItem>
+                      <SelectItem id="billing-error">Billing error correction</SelectItem>
+                      <SelectItem id="service-failure">Service failure compensation</SelectItem>
+                      <SelectItem id="loyalty-exception">Loyalty exception</SelectItem>
+                      <SelectItem id="manager-approval">Manager approved waiver</SelectItem>
+                      <SelectItem id="promotional">Promotional offer</SelectItem>
+                    </Select>
+                  </div>
+                </div>
+                {/* Footer */}
+                <div style={{ borderTop: "1px solid var(--cim-border-base, #dadcdd)", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-muted, #94979b)" }}>new item total</span>
+                    {hasChange ? (
+                      <>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                          <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{currentTotal.toFixed(2)} USD</span>
+                          <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{newTotal.toFixed(2)} USD</span>
+                        </div>
+                        {savings > 0 && (
+                          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-success, #007e3f)" }}>{savings.toFixed(2)} USD in savings due to certain charges being waived off</span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-muted, #94979b)" }}>{currentTotal.toFixed(2)} USD</span>
+                        <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-muted, #94979b)" }}>No changes selected</span>
+                      </>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "16px", flexShrink: 0 }}>
+                    <Button variant="secondary" onPress={() => setIsEditChargesOpen(false)}>Cancel</Button>
+                    <Button
+                      isDisabled={!waiveReason.trim()}
+                      onPress={() => {
+                        setSavedWaivedChargeIds(modalWaivedIds);
+                        setIsEditChargesOpen(false);
+                      }}
+                    >
+                      Confirm
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Price Override Modal */}
         {isPriceOverrideOpen && (() => {
           const overrideParsed = priceOverrideUnitPrice !== "" ? parseFloat(priceOverrideUnitPrice) : NaN;
           const overrideValid = !isNaN(overrideParsed) && overrideParsed >= 0;
           const modalQtyParsed = priceOverrideQty !== "" ? parseInt(priceOverrideQty, 10) : quantity;
           const modalQty = !isNaN(modalQtyParsed) && modalQtyParsed > 0 ? modalQtyParsed : quantity;
-          const modalOrigBase = parseFloat((unitPrice * modalQty).toFixed(2));
+          const modalOrigBase = basePrice; // always fixed: original qty × original unit price
           const modalNewBase = overrideValid ? parseFloat((overrideParsed * modalQty).toFixed(2)) : modalOrigBase;
           const modalDiscount = overrideValid ? parseFloat((modalOrigBase - modalNewBase).toFixed(2)) : 0;
-          const hasModalCustomization = overrideValid && overrideParsed !== unitPrice;
+          const hasModalCustomization = overrideValid && (overrideParsed !== unitPrice || modalQty !== quantity);
           const fieldRow: React.CSSProperties = { display: "flex", gap: "8px", alignItems: "flex-end", width: "100%" };
           const eqSign: React.CSSProperties = { fontSize: "0.75rem", color: "var(--cim-fg-success, #007e3f)", alignSelf: "stretch", display: "flex", alignItems: "center", flexShrink: 0, paddingBottom: "8px" };
           return (
@@ -1701,7 +1818,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                   </button>
                 </div>
                 {/* Body */}
-                <div style={{ flex: 1, overflowY: "auto", padding: "0 16px" }}>
+                <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "0 16px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: "24px", padding: "16px 0" }}>
                     {/* Product row */}
                     <div style={{ display: "flex", gap: "24px", alignItems: "flex-start", padding: "16px" }}>
@@ -1717,27 +1834,25 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                           {basePrice.toFixed(2)} USD ({quantity} qty × {unitPrice.toFixed(2)}/unit)
                         </p>
                         {/* Fields */}
-                        <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginTop: "24px" }}>
-                          <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto 1fr 1fr", gap: "8px", alignItems: "end", marginTop: "24px", minWidth: 0 }}>
+                          <div style={{ minWidth: 0, overflow: "hidden" }}>
                             <TextField
                               label="Quantity"
                               value={priceOverrideQty}
                               onChange={(val) => setPriceOverrideQty(val)}
-                              placeholder={String(quantity)}
                               type="number"
                             />
                           </div>
-                          <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                          <div style={{ minWidth: 0, overflow: "hidden" }}>
                             <TextField
                               label="Unit price"
                               value={priceOverrideUnitPrice}
                               onChange={(val) => setPriceOverrideUnitPrice(val)}
-                              placeholder={unitPrice.toFixed(2)}
                               type="number"
                             />
                           </div>
                           <span style={eqSign}>=</span>
-                          <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                          <div style={{ minWidth: 0, overflow: "hidden" }}>
                             <TextField
                               label="Packaged price"
                               value={modalNewBase.toFixed(2)}
@@ -1745,10 +1860,10 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                               isReadOnly
                             />
                           </div>
-                          <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                          <div style={{ minWidth: 0, overflow: "hidden" }}>
                             <TextField
                               label="Discount"
-                              value={modalDiscount > 0 ? modalDiscount.toFixed(2) : "0.00"}
+                              value={overrideValid ? Math.abs(modalDiscount).toFixed(2) : "0.00"}
                               suffix="USD"
                               isReadOnly
                             />
@@ -1765,7 +1880,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                       const accQtyParsed = parseInt(accInputQty, 10);
                       const accQty = !isNaN(accQtyParsed) && accQtyParsed > 0 ? accQtyParsed : acc.quantity;
                       const accValid = !isNaN(accParsed) && accParsed >= 0;
-                      const accOrigPackaged = parseFloat((acc.unitPrice * accQty).toFixed(2));
+                      const accOrigPackaged = parseFloat((acc.unitPrice * acc.quantity).toFixed(2)); // fixed: original qty × original unit price
                       const accPackaged = accValid ? parseFloat((accParsed * accQty).toFixed(2)) : accOrigPackaged;
                       const accDiscount = accValid ? parseFloat((accOrigPackaged - accPackaged).toFixed(2)) : 0;
                       return (
@@ -1783,27 +1898,25 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                               <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
                                 {parseFloat((acc.unitPrice * acc.quantity).toFixed(2)).toFixed(2)} USD ({acc.quantity} qty × {acc.unitPrice.toFixed(2)}/unit)
                               </p>
-                              <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginTop: "24px" }}>
-                                <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto 1fr 1fr", gap: "8px", alignItems: "end", marginTop: "24px", minWidth: 0 }}>
+                                <div style={{ minWidth: 0, overflow: "hidden" }}>
                                   <TextField
                                     label="Quantity"
                                     value={accInputQty}
                                     onChange={(val) => setPriceOverrideAccessoryQuantities((prev) => ({ ...prev, [acc.id]: val }))}
-                                    placeholder={String(acc.quantity)}
                                     type="number"
                                   />
                                 </div>
-                                <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                                <div style={{ minWidth: 0, overflow: "hidden" }}>
                                   <TextField
                                     label="Unit price"
                                     value={accInputPrice}
                                     onChange={(val) => setPriceOverrideAccessoryPrices((prev) => ({ ...prev, [acc.id]: val }))}
-                                    placeholder={acc.unitPrice.toFixed(2)}
                                     type="number"
                                   />
                                 </div>
                                 <span style={eqSign}>=</span>
-                                <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                                <div style={{ minWidth: 0, overflow: "hidden" }}>
                                   <TextField
                                     label="Packaged price"
                                     value={accPackaged.toFixed(2)}
@@ -1811,10 +1924,10 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                                     isReadOnly
                                   />
                                 </div>
-                                <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                                <div style={{ minWidth: 0, overflow: "hidden" }}>
                                   <TextField
                                     label="Discount"
-                                    value={accDiscount > 0 ? accDiscount.toFixed(2) : "0.00"}
+                                    value={accValid ? Math.abs(accDiscount).toFixed(2) : "0.00"}
                                     suffix="USD"
                                     isReadOnly
                                   />
@@ -1827,18 +1940,25 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                     })}
 
                     {/* Reason */}
-                    <TextArea
+                    <Select
                       label="Reason for price override"
-                      value={priceOverrideReason}
-                      onChange={(val) => setPriceOverrideReason(val)}
-                      placeholder="Write here..."
                       isRequired
-                    />
-                    {/* Warning banner */}
-                    {modalDiscount > 0 && (
+                      selectedKey={priceOverrideReason || null}
+                      onSelectionChange={(key) => setPriceOverrideReason(String(key))}
+                      placeholder="Select a reason..."
+                    >
+                      <SelectItem id="customer-loyalty">Customer loyalty discount</SelectItem>
+                      <SelectItem id="volume-discount">Volume discount</SelectItem>
+                      <SelectItem id="competitive-match">Competitive price match</SelectItem>
+                      <SelectItem id="promotional">Promotional pricing</SelectItem>
+                      <SelectItem id="executive-approval">Executive approval</SelectItem>
+                      <SelectItem id="error-correction">Error correction</SelectItem>
+                    </Select>
+                    {/* Warning banner — only when discount > 15% of original total */}
+                    {overrideValid && modalDiscount > 0 && (modalDiscount / modalOrigBase) > 0.15 && (
                       <div style={{ display: "flex", alignItems: "center", gap: "12px", border: "1px solid #f59e0b", borderRadius: "6px", padding: "12px 16px" }}>
                         <span style={{ color: "#f59e0b", fontSize: "1.125rem", flexShrink: 0 }}>⚠</span>
-                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>This price will require admin approval</span>
+                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>This price will require admin approval (discount exceeds 15%)</span>
                       </div>
                     )}
                   </div>
@@ -1853,8 +1973,10 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                           <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{basePrice.toFixed(2)} USD</span>
                           <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{modalNewBase.toFixed(2)} USD</span>
                         </div>
-                        {modalDiscount > 0 && (
-                          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-success, #007e3f)" }}>{modalDiscount.toFixed(2)} USD in savings due to price override</span>
+                        {modalDiscount !== 0 && (
+                          <span style={{ fontSize: "0.75rem", color: modalDiscount > 0 ? "var(--cim-fg-success, #007e3f)" : "var(--cim-fg-critical, #d10023)" }}>
+                            {modalDiscount > 0 ? `${modalDiscount.toFixed(2)} USD in savings` : `${Math.abs(modalDiscount).toFixed(2)} USD price increase`}
+                          </span>
                         )}
                       </>
                     ) : (
