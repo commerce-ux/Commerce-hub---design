@@ -296,6 +296,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const extraChargesRef = useRef<HTMLDivElement>(null);
     const addOnsRef = useRef<HTMLDivElement>(null);
     const itemPriceRef = useRef<HTMLDivElement>(null);
+    const customiseOfferRef = useRef<HTMLDivElement>(null);
 
     const sectionRefs: Record<TabLabel, React.RefObject<HTMLDivElement | null>> = {
       Attributes: attributesRef,
@@ -1318,8 +1319,8 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
             );
           })()}
 
-          {/* Customise offer section */}
-          <div style={{
+          {/* Apply discount section */}
+          <div ref={customiseOfferRef} style={{
             background: "white",
             border: "1px solid var(--cim-border-base, #dadcdd)",
             borderRadius: "6px",
@@ -1328,49 +1329,31 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
             flexDirection: "column",
             gap: "16px",
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-              <p style={sectionHeading}>Customise offer</p>
-              <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)", lineHeight: "16px" }}>
-                {basePrice > 0
-                  ? `(Choose any of the options to customise the current item price of USD ${basePrice.toFixed(2)})`
-                  : "(Choose any of the options to customise the item price)"}
-              </span>
-            </div>
+            <p style={sectionHeading}>Apply discount</p>
 
-            {/* % Based pricing option */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <RadioGroup aria-label="Offer type" value={activeOfferType} onChange={(v) => {
-                setActiveOfferType(v as "pct" | "price");
-                if (v === "pct") { setNewPriceInput(""); }
-                else { setPctBasedInput(""); setOfferDiscountPct(0); }
-              }}>
-                <Radio value="pct">% Based pricing</Radio>
-              </RadioGroup>
+            <div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
+              {/* % chips */}
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15].map((pct) => {
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15].map((pct) => {
                   const isSelected = pctBasedInput === String(pct);
-                  const isDisabled = activeOfferType !== "pct";
                   return (
                     <button
                       key={pct}
                       onClick={() => {
-                        if (isDisabled) return;
-                        if (isSelected) { setPctBasedInput(""); setOfferDiscountPct(0); }
-                        else { setPctBasedInput(String(pct)); setNewPriceInput(""); setOfferDiscountPct(pct); }
+                        if (isSelected && pct !== 0) { setPctBasedInput(""); setOfferDiscountPct(0); }
+                        else { setPctBasedInput(String(pct)); setOfferDiscountPct(pct); setNewPriceInput(""); }
                       }}
                       style={{
-                        background: "white",
-                        border: isSelected ? "1px solid var(--cim-border-focus, #0172f1)" : "1px solid var(--cim-border-base, #dadcdd)",
+                        background: isSelected ? "var(--cim-bg-accent-subtle, #eaf8fb)" : "white",
+                        border: isSelected ? "1px solid var(--cim-border-accent, #0091b8)" : "1px solid var(--cim-border-base, #dadcdd)",
                         borderRadius: "6px",
-                        boxShadow: isSelected
-                          ? "0 0 0 3px white, 0 0 0 5px var(--cim-border-focus, #0172f1)"
-                          : "0px 1px 1px 0px rgba(0,0,0,0.08), 0px 1px 3px 0px rgba(0,0,0,0.04)",
-                        padding: "1px 13px",
-                        minHeight: "32px",
-                        fontSize: "0.875rem",
+                        boxShadow: "0px 1px 1px 0px rgba(0,0,0,0.08), 0px 1px 3px 0px rgba(0,0,0,0.04)",
+                        padding: "7px 17px",
+                        minHeight: "40px",
+                        fontSize: "1rem",
                         fontWeight: 600,
-                        color: isDisabled ? "var(--cim-fg-muted, #94979b)" : "var(--cim-fg-accent, #007798)",
-                        cursor: isDisabled ? "default" : "pointer",
+                        color: "var(--cim-fg-accent, #007798)",
+                        cursor: "pointer",
                       }}
                     >
                       {pct}%
@@ -1378,81 +1361,36 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                   );
                 })}
               </div>
-            </div>
 
-            {/* New price option */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <RadioGroup aria-label="Offer type" value={activeOfferType} onChange={(v) => {
-                setActiveOfferType(v as "pct" | "price");
-                if (v === "pct") { setNewPriceInput(""); }
-                else { setPctBasedInput(""); setOfferDiscountPct(0); }
-              }}>
-                <Radio value="price">New price</Radio>
-              </RadioGroup>
-              <div style={{ maxWidth: "320px" }}>
-                <TextField
-                  aria-label="New price"
-                  label={undefined}
-                  value={newPriceInput}
-                  onChange={(val) => {
-                    setNewPriceInput(val);
-                    setPctBasedInput("");
-                    setOfferDiscountPct(0);
-                  }}
-                  isDisabled={activeOfferType !== "price"}
-                  isClearable
-                  prefix="USD"
-                  placeholder="0.00"
-                  description={!newPriceInvalid ? (basePrice > 0 ? `Cannot exceed current item price (USD ${basePrice.toFixed(2)})` : "Enter a quantity to see the current price") : undefined}
-                  inputMode="decimal"
-                />
-                {newPriceInvalid && (
-                  <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-critical, #dc2626)", marginTop: "4px", display: "block" }}>
-                    Cannot exceed current item price (USD {basePrice.toFixed(2)})
-                  </span>
-                )}
+              {/* Reason for providing discount */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <div style={{ display: "flex", gap: "4px", alignItems: "center", fontSize: "0.875rem", lineHeight: "20px" }}>
+                  <span style={{ color: "var(--cim-fg-base, #15191d)" }}>Reason for providing discount</span>
+                  <span style={{ color: "var(--cim-fg-critical, #d10023)" }}>*</span>
+                </div>
+                <Select
+                  aria-label="Reason for providing discount"
+                  selectedKey={overrideReason || null}
+                  onSelectionChange={(key) => setOverrideReason(key as string)}
+                  placeholder="Select an item"
+                >
+                  <SelectItem id="loyalty_discount">Loyalty discount</SelectItem>
+                  <SelectItem id="bulk_deal">Bulk deal</SelectItem>
+                  <SelectItem id="promotional">Promotional offer</SelectItem>
+                  <SelectItem id="error_correction">Error correction</SelectItem>
+                  <SelectItem id="manager_approval">Manager approval</SelectItem>
+                  <SelectItem id="other">Other</SelectItem>
+                </Select>
               </div>
-            </div>
-
-            {/* Reason for price override */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <div style={{ display: "flex", gap: "4px", alignItems: "center", fontSize: "0.875rem", lineHeight: "20px" }}>
-                <span style={{ color: "var(--cim-fg-base, #15191d)" }}>Reason for price override</span>
-                <span style={{ color: "var(--cim-fg-critical, #d10023)" }}>*</span>
-              </div>
-            <Select
-              aria-label="Reason for price override"
-              selectedKey={overrideReason || null}
-              onSelectionChange={(key) => setOverrideReason(key as string)}
-              description="Why do you want to override the price of this item"
-              placeholder="Select an item"
-            >
-              <SelectItem id="loyalty_discount">Loyalty discount</SelectItem>
-              <SelectItem id="bulk_deal">Bulk deal</SelectItem>
-              <SelectItem id="promotional">Promotional offer</SelectItem>
-              <SelectItem id="error_correction">Error correction</SelectItem>
-              <SelectItem id="manager_approval">Manager approval</SelectItem>
-              <SelectItem id="other">Other</SelectItem>
-            </Select>
             </div>
 
             {/* Divider + new item total summary */}
             {(() => {
-              const newPriceValue = parseFloat(newPriceInput) || 0;
-              const hasCustomization =
-                (activeOfferType === "pct" && offerDiscountPct > 0) ||
-                (activeOfferType === "price" && newPriceValue > 0 && !newPriceInvalid);
-              const discountedBase = activeOfferType === "pct" && offerDiscountPct > 0
-                ? basePrice * (1 - offerDiscountPct / 100)
-                : activeOfferType === "price" && newPriceValue > 0
-                ? newPriceValue
-                : basePrice;
-              const newItemPreTax = discountedBase + extraChargesTotal + accessoriesTotal;
-              const baseItemPreTax = basePrice + extraChargesTotal + accessoriesTotal;
-              const taxMult = 1 + taxRate / 100;
-              const basePriceWithTax = parseFloat((baseItemPreTax * taxMult).toFixed(2));
-              const newItemTotal = parseFloat((newItemPreTax * taxMult).toFixed(2));
-              const savings = hasCustomization ? parseFloat((basePriceWithTax - newItemTotal).toFixed(2)) : 0;
+              const hasCustomization = offerDiscountPct > 0;
+              const discountedBase = hasCustomization ? basePrice * (1 - offerDiscountPct / 100) : basePrice;
+              const newItemPreTax = parseFloat((discountedBase + extraChargesTotal + accessoriesTotal).toFixed(2));
+              const baseItemPreTax = parseFloat((basePrice + extraChargesTotal + accessoriesTotal).toFixed(2));
+              const savings = hasCustomization ? parseFloat((baseItemPreTax - newItemPreTax).toFixed(2)) : 0;
               return (
                 <>
                   <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)", margin: "0 -12px" }} />
@@ -1462,16 +1400,16 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                       {hasCustomization ? (
                         <>
                           <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-                            <span style={{ fontSize: "1rem", lineHeight: "24px", color: "var(--cim-fg-muted, #94979b)", textDecoration: "line-through" }}>
-                              {basePriceWithTax.toFixed(2)} USD
+                            <span style={{ fontSize: "1rem", lineHeight: "24px", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>
+                              {baseItemPreTax.toFixed(2)} USD
                             </span>
                             <span style={{ fontSize: "1.125rem", fontWeight: 600, lineHeight: "24px", color: "var(--cim-fg-base, #15191d)" }}>
-                              {newItemTotal.toFixed(2)} USD
+                              {newItemPreTax.toFixed(2)} USD
                             </span>
-                            <span style={{ fontSize: "0.75rem", lineHeight: "16px", color: "var(--cim-fg-muted, #94979b)" }}>(inc. tax)</span>
+                            <span style={{ fontSize: "0.75rem", lineHeight: "16px", color: "var(--cim-fg-base, #15191d)" }}>(exc. tax)</span>
                           </div>
-                          <span style={{ fontSize: "0.75rem", lineHeight: "16px", color: "var(--cim-fg-success, #15803d)" }}>
-                            {savings.toFixed(2)} USD saving due to {activeOfferType === "pct" ? `${offerDiscountPct}% discount` : "new price"}
+                          <span style={{ fontSize: "0.75rem", lineHeight: "16px", color: "var(--cim-fg-success, #007e3f)" }}>
+                            {savings.toFixed(2)} USD saving due to {offerDiscountPct}% discount
                           </span>
                         </>
                       ) : (
@@ -1482,11 +1420,11 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                       )}
                     </div>
                     <div style={{ flexShrink: 0 }}>
-                      <Button variant="secondary" size="small" isDisabled={!overrideReason} onPress={() => {
+                      <Button variant="secondary" size="small" isDisabled={!overrideReason || !hasCustomization} onPress={() => {
                         setSavedOfferDiscountPct(offerDiscountPct);
-                        setSavedNewPriceInput(newPriceInput);
+                        setSavedNewPriceInput("");
                       }}>
-                        Save changes
+                        Save changes to price
                       </Button>
                     </div>
                   </div>
@@ -1619,6 +1557,16 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
                 <span>Tax ({taxRate}%)</span>
                 <span>{tax.toFixed(2)} USD</span>
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                <Button variant="secondary" size="small" onPress={() => customiseOfferRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })}>
+                  Apply discount
+                </Button>
+                <Button variant="secondary" size="small" onPress={() => scrollToSection("Extra charges")}>
+                  Edit or remove charges
+                </Button>
               </div>
 
               {/* Divider */}
