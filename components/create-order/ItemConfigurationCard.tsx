@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef, useCallback } from "react";
-import { Button, Select, SelectItem, TextField, Disclosure, Badge, Tooltip, RadioGroup, Radio } from "@cimpress-ui/react";
+import { Button, Select, SelectItem, TextField, TextArea, Disclosure, Badge, Tooltip, RadioGroup, Radio } from "@cimpress-ui/react";
 import { IconChevronDownBold } from "@cimpress-ui/react/icons";
-import { IconInfoCircle, IconCheckCircleFill, IconChevronDown, IconTrash } from "@cimpress-ui/react/icons";
+import { IconInfoCircle, IconCheckCircleFill, IconChevronDown, IconTrash, IconCloseBold } from "@cimpress-ui/react/icons";
 import type { ProductCatalogItem, DraftOrderItem, DraftOrderItemAttribute, QuantityPricingTier } from "@/lib/types";
 import { resolvePricingTier as resolveTier, computeIncrementRanges, generateGuideQuantities } from "@/lib/pricingUtils";
 import { PreviousArtworkModal } from "./PreviousArtworkModal";
@@ -1688,173 +1688,160 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
           const modalNewBase = overrideValid ? parseFloat((overrideParsed * modalQty).toFixed(2)) : modalOrigBase;
           const modalDiscount = overrideValid ? parseFloat((modalOrigBase - modalNewBase).toFixed(2)) : 0;
           const hasModalCustomization = overrideValid && overrideParsed !== unitPrice;
+          const fieldRow: React.CSSProperties = { display: "flex", gap: "8px", alignItems: "flex-end", width: "100%" };
+          const eqSign: React.CSSProperties = { fontSize: "0.75rem", color: "var(--cim-fg-success, #007e3f)", alignSelf: "stretch", display: "flex", alignItems: "center", flexShrink: 0, paddingBottom: "8px" };
           return (
-            <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ background: "white", borderRadius: "8px", width: "min(90vw, 760px)", maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "64px" }}>
+              <div style={{ background: "white", borderRadius: "8px", width: "min(100%, 864px)", maxHeight: "calc(100vh - 128px)", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0px 2px 8px rgba(0,0,0,0.12), 0px 8px 16px rgba(0,0,0,0.11), 0px 16px 24px rgba(0,0,0,0.10), 0px 16px 32px rgba(0,0,0,0.09), 0px 24px 48px rgba(0,0,0,0.08)" }}>
                 {/* Header */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", borderBottom: "1px solid var(--cim-border-base, #dadcdd)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "24px 24px 16px", borderBottom: "1px solid var(--cim-border-base, #dadcdd)" }}>
                   <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>Price override</span>
-                  <button onClick={() => setIsPriceOverrideOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1.375rem", color: "var(--cim-fg-base, #15191d)", lineHeight: 1, display: "flex", alignItems: "center", padding: "4px" }}>×</button>
+                  <button onClick={() => setIsPriceOverrideOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cim-fg-base, #15191d)", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, width: "32px", height: "32px", borderRadius: "4px" }}>
+                    <IconCloseBold size={16} />
+                  </button>
                 </div>
                 {/* Body */}
-                <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "24px" }}>
-                  {/* Product row */}
-                  <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
-                    <div style={{ width: "120px", height: "96px", borderRadius: "6px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0, border: "1px solid var(--cim-border-base, #dadcdd)" }}>
-                      {product.imageUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={product.imageUrl} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      )}
-                    </div>
-                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
-                      <p style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--cim-fg-base, #15191d)" }}>{product.name}</p>
-                      <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                        {basePrice.toFixed(2)} USD ({quantity} qty × {unitPrice.toFixed(2)}/unit)
-                      </p>
-                      {/* Fields */}
-                      <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginTop: "12px", flexWrap: "wrap" }}>
-                        {/* Quantity */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                          <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Quantity</label>
-                          <input
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={priceOverrideQty}
-                            onChange={(e) => setPriceOverrideQty(e.target.value)}
-                            placeholder={String(quantity)}
-                            style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", fontSize: "1rem", minHeight: "40px", minWidth: "90px", outline: "none", fontFamily: "inherit", color: "var(--cim-fg-base, #15191d)" }}
-                          />
-                        </div>
-                        {/* Unit price */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                          <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Unit price</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={priceOverrideUnitPrice}
-                            onChange={(e) => setPriceOverrideUnitPrice(e.target.value)}
-                            placeholder={unitPrice.toFixed(2)}
-                            style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", fontSize: "1rem", minHeight: "40px", minWidth: "110px", outline: "none", fontFamily: "inherit", color: "var(--cim-fg-base, #15191d)" }}
-                          />
-                        </div>
-                        {/* = */}
-                        <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", paddingBottom: "8px" }}>=</span>
-                        {/* Packaged price */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                          <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Packaged price</label>
-                          <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "130px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                            <span>{modalNewBase.toFixed(2)}</span>
-                            <span style={{ color: "var(--cim-fg-subtle, #5f6469)", fontSize: "0.875rem" }}>USD</span>
+                <div style={{ flex: 1, overflowY: "auto", padding: "0 16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "24px", padding: "16px 0" }}>
+                    {/* Product row */}
+                    <div style={{ display: "flex", gap: "24px", alignItems: "flex-start", padding: "16px" }}>
+                      <div style={{ width: "150px", height: "150px", borderRadius: "6px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0, border: "1.3px solid var(--cim-border-base, #dadcdd)" }}>
+                        {product.imageUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={product.imageUrl} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        )}
+                      </div>
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{product.name}</p>
+                        <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                          {basePrice.toFixed(2)} USD ({quantity} qty × {unitPrice.toFixed(2)}/unit)
+                        </p>
+                        {/* Fields */}
+                        <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginTop: "24px" }}>
+                          <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                            <TextField
+                              label="Quantity"
+                              value={priceOverrideQty}
+                              onChange={(val) => setPriceOverrideQty(val)}
+                              placeholder={String(quantity)}
+                              type="number"
+                            />
                           </div>
-                        </div>
-                        {/* Discount */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                          <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Discount</label>
-                          <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "110px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                            <span>{modalDiscount > 0 ? modalDiscount.toFixed(2) : "0.00"}</span>
-                            <span style={{ color: "var(--cim-fg-subtle, #5f6469)", fontSize: "0.875rem" }}>USD</span>
+                          <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                            <TextField
+                              label="Unit price"
+                              value={priceOverrideUnitPrice}
+                              onChange={(val) => setPriceOverrideUnitPrice(val)}
+                              placeholder={unitPrice.toFixed(2)}
+                              type="number"
+                            />
+                          </div>
+                          <span style={eqSign}>=</span>
+                          <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                            <TextField
+                              label="Packaged price"
+                              value={modalNewBase.toFixed(2)}
+                              suffix="USD"
+                              isReadOnly
+                            />
+                          </div>
+                          <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                            <TextField
+                              label="Discount"
+                              value={modalDiscount > 0 ? modalDiscount.toFixed(2) : "0.00"}
+                              suffix="USD"
+                              isReadOnly
+                            />
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  {/* Accessory rows */}
-                  {addedAccessories.map((acc) => {
-                    const accCatalog = MOCK_ACCESSORIES.find((m) => m.id === acc.id);
-                    const accInputPrice = priceOverrideAccessoryPrices[acc.id] ?? "";
-                    const accInputQty = priceOverrideAccessoryQuantities[acc.id] ?? String(acc.quantity);
-                    const accParsed = accInputPrice !== "" ? parseFloat(accInputPrice) : NaN;
-                    const accQtyParsed = parseInt(accInputQty, 10);
-                    const accQty = !isNaN(accQtyParsed) && accQtyParsed > 0 ? accQtyParsed : acc.quantity;
-                    const accValid = !isNaN(accParsed) && accParsed >= 0;
-                    const accOrigPackaged = parseFloat((acc.unitPrice * accQty).toFixed(2));
-                    const accPackaged = accValid ? parseFloat((accParsed * accQty).toFixed(2)) : accOrigPackaged;
-                    const accDiscount = accValid ? parseFloat((accOrigPackaged - accPackaged).toFixed(2)) : 0;
-                    return (
-                      <div key={acc.id}>
-                        <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)", margin: "0 0 24px" }} />
-                        <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
-                          <div style={{ width: "120px", height: "96px", borderRadius: "6px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0, border: "1px solid var(--cim-border-base, #dadcdd)" }}>
-                            {accCatalog?.imageUrl && (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={accCatalog.imageUrl} alt={acc.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                            )}
-                          </div>
-                          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
-                            <p style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--cim-fg-base, #15191d)" }}>{acc.label}</p>
-                            <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                              {parseFloat((acc.unitPrice * acc.quantity).toFixed(2)).toFixed(2)} USD ({acc.quantity} qty × {acc.unitPrice.toFixed(2)}/unit)
-                            </p>
-                            <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginTop: "12px", flexWrap: "wrap" }}>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Quantity</label>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  step={1}
-                                  value={accInputQty}
-                                  onChange={(e) => setPriceOverrideAccessoryQuantities((prev) => ({ ...prev, [acc.id]: e.target.value }))}
-                                  placeholder={String(acc.quantity)}
-                                  style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", fontSize: "1rem", minHeight: "40px", minWidth: "90px", outline: "none", fontFamily: "inherit", color: "var(--cim-fg-base, #15191d)" }}
-                                />
-                              </div>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Unit price</label>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step={0.01}
-                                  value={accInputPrice}
-                                  onChange={(e) => setPriceOverrideAccessoryPrices((prev) => ({ ...prev, [acc.id]: e.target.value }))}
-                                  placeholder={acc.unitPrice.toFixed(2)}
-                                  style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", fontSize: "1rem", minHeight: "40px", minWidth: "110px", outline: "none", fontFamily: "inherit", color: "var(--cim-fg-base, #15191d)" }}
-                                />
-                              </div>
-                              <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", paddingBottom: "8px" }}>=</span>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Packaged price</label>
-                                <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "130px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                                  <span>{accPackaged.toFixed(2)}</span>
-                                  <span style={{ color: "var(--cim-fg-subtle, #5f6469)", fontSize: "0.875rem" }}>USD</span>
+                    {/* Accessory rows */}
+                    {addedAccessories.map((acc) => {
+                      const accCatalog = MOCK_ACCESSORIES.find((m) => m.id === acc.id);
+                      const accInputPrice = priceOverrideAccessoryPrices[acc.id] ?? "";
+                      const accInputQty = priceOverrideAccessoryQuantities[acc.id] ?? String(acc.quantity);
+                      const accParsed = accInputPrice !== "" ? parseFloat(accInputPrice) : NaN;
+                      const accQtyParsed = parseInt(accInputQty, 10);
+                      const accQty = !isNaN(accQtyParsed) && accQtyParsed > 0 ? accQtyParsed : acc.quantity;
+                      const accValid = !isNaN(accParsed) && accParsed >= 0;
+                      const accOrigPackaged = parseFloat((acc.unitPrice * accQty).toFixed(2));
+                      const accPackaged = accValid ? parseFloat((accParsed * accQty).toFixed(2)) : accOrigPackaged;
+                      const accDiscount = accValid ? parseFloat((accOrigPackaged - accPackaged).toFixed(2)) : 0;
+                      return (
+                        <div key={acc.id}>
+                          <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)" }} />
+                          <div style={{ display: "flex", gap: "24px", alignItems: "flex-start", padding: "16px" }}>
+                            <div style={{ width: "150px", height: "150px", borderRadius: "6px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0, border: "1.3px solid var(--cim-border-base, #dadcdd)" }}>
+                              {accCatalog?.imageUrl && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={accCatalog.imageUrl} alt={acc.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              )}
+                            </div>
+                            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+                              <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{acc.label}</p>
+                              <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                                {parseFloat((acc.unitPrice * acc.quantity).toFixed(2)).toFixed(2)} USD ({acc.quantity} qty × {acc.unitPrice.toFixed(2)}/unit)
+                              </p>
+                              <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginTop: "24px" }}>
+                                <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                                  <TextField
+                                    label="Quantity"
+                                    value={accInputQty}
+                                    onChange={(val) => setPriceOverrideAccessoryQuantities((prev) => ({ ...prev, [acc.id]: val }))}
+                                    placeholder={String(acc.quantity)}
+                                    type="number"
+                                  />
                                 </div>
-                              </div>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                <label style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Discount</label>
-                                <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "8px 12px", minHeight: "40px", minWidth: "110px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: "var(--cim-bg-subtle, #f8f9fa)", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                                  <span>{accDiscount > 0 ? accDiscount.toFixed(2) : "0.00"}</span>
-                                  <span style={{ color: "var(--cim-fg-subtle, #5f6469)", fontSize: "0.875rem" }}>USD</span>
+                                <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                                  <TextField
+                                    label="Unit price"
+                                    value={accInputPrice}
+                                    onChange={(val) => setPriceOverrideAccessoryPrices((prev) => ({ ...prev, [acc.id]: val }))}
+                                    placeholder={acc.unitPrice.toFixed(2)}
+                                    type="number"
+                                  />
+                                </div>
+                                <span style={eqSign}>=</span>
+                                <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                                  <TextField
+                                    label="Packaged price"
+                                    value={accPackaged.toFixed(2)}
+                                    suffix="USD"
+                                    isReadOnly
+                                  />
+                                </div>
+                                <div style={{ flex: "1 0 0", minWidth: 0 }}>
+                                  <TextField
+                                    label="Discount"
+                                    value={accDiscount > 0 ? accDiscount.toFixed(2) : "0.00"}
+                                    suffix="USD"
+                                    isReadOnly
+                                  />
                                 </div>
                               </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
 
-                  {/* Reason */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <div style={{ display: "flex", gap: "4px", fontSize: "0.875rem", alignItems: "center" }}>
-                      <span style={{ color: "var(--cim-fg-base, #15191d)" }}>Reason for price override</span>
-                      <span style={{ color: "var(--cim-fg-critical, #d10023)" }}>*</span>
-                    </div>
-                    <textarea
+                    {/* Reason */}
+                    <TextArea
+                      label="Reason for price override"
                       value={priceOverrideReason}
-                      onChange={(e) => setPriceOverrideReason(e.target.value)}
+                      onChange={(val) => setPriceOverrideReason(val)}
                       placeholder="Write here..."
-                      rows={3}
-                      style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", padding: "12px", fontSize: "1rem", resize: "vertical", outline: "none", fontFamily: "inherit", color: "var(--cim-fg-base, #15191d)", lineHeight: 1.5 }}
+                      isRequired
                     />
+                    {/* Warning banner */}
+                    {modalDiscount > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px", border: "1px solid #f59e0b", borderRadius: "6px", padding: "12px 16px" }}>
+                        <span style={{ color: "#f59e0b", fontSize: "1.125rem", flexShrink: 0 }}>⚠</span>
+                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>This price will require admin approval</span>
+                      </div>
+                    )}
                   </div>
-                  {/* Warning banner */}
-                  {modalDiscount > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "12px", border: "1px solid #f59e0b", borderRadius: "6px", padding: "12px 16px" }}>
-                      <span style={{ color: "#f59e0b", fontSize: "1.125rem", flexShrink: 0 }}>⚠</span>
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>This price will require admin approval</span>
-                    </div>
-                  )}
                 </div>
                 {/* Footer */}
                 <div style={{ borderTop: "1px solid var(--cim-border-base, #dadcdd)", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
@@ -1877,7 +1864,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                       </>
                     )}
                   </div>
-                  <div style={{ display: "flex", gap: "12px", flexShrink: 0 }}>
+                  <div style={{ display: "flex", gap: "16px", flexShrink: 0 }}>
                     <Button variant="secondary" onPress={() => setIsPriceOverrideOpen(false)}>Cancel</Button>
                     <Button
                       isDisabled={!overrideValid || !priceOverrideReason.trim()}
