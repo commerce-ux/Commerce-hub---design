@@ -387,6 +387,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [priceOverrideAccessoryQuantities, setPriceOverrideAccessoryQuantities] = useState<Record<string, string>>({});
     const [isEditChargesOpen, setIsEditChargesOpen] = useState(false);
     const [savedWaivedChargeIds, setSavedWaivedChargeIds] = useState<string[]>([]);
+    const [savedWaiveReason, setSavedWaiveReason] = useState<string>("");
     const [modalWaivedIds, setModalWaivedIds] = useState<string[]>([]);
     const [waiveReason, setWaiveReason] = useState<string>("");
 
@@ -452,8 +453,11 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const waivedChargesTotal = parseFloat(allExtraCharges
       .filter((c) => savedWaivedChargeIds.includes(c.id))
       .reduce((sum, c) => sum + c.unitPrice, 0).toFixed(2));
-    const extraChargesTotal = parseFloat(((selectedCharge?.unitPrice ?? 0) + artworkCharge - waivedChargesTotal).toFixed(2));
-    const chargesApplied = (selectedCharge ? 1 : 0) + (artworkOption !== null ? 1 : 0);
+    // All product extra charges are applied by default; waived ones are subtracted
+    const allExtraChargesSubtotal = parseFloat(allExtraCharges.reduce((sum, c) => sum + c.unitPrice, 0).toFixed(2));
+    const extraChargesTotal = parseFloat((allExtraChargesSubtotal + artworkCharge - waivedChargesTotal).toFixed(2));
+    const activeExtraChargesCount = allExtraCharges.filter((c) => !savedWaivedChargeIds.includes(c.id)).length;
+    const chargesApplied = activeExtraChargesCount + (artworkOption !== null ? 1 : 0);
     const accessoriesTotal = parseFloat(addedAccessories.reduce((sum, a) => {
       const price = savedAccessoryOverridePrices[a.id] ?? a.unitPrice;
       return sum + a.quantity * price;
@@ -1550,16 +1554,8 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                 </div>
               )}
 
-              {/* Selected extra charge — shown as its own direct line */}
-              {selectedCharge && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                  <span>{selectedCharge.label}</span>
-                  <span>{selectedCharge.unitPrice.toFixed(2)} USD</span>
-                </div>
-              )}
-
-              {/* Total charges applied — collapsible, only shown when at least one charge applies */}
-              {chargesApplied > 0 && (
+              {/* Total charges applied — collapsible, shown when product has extra charges or artwork charge */}
+              {(allExtraCharges.length > 0 || artworkOption !== null) && (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1572,21 +1568,34 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                           <IconChevronDown size={16} />
                         </span>
                       </button>
-                      <button
-                        onClick={() => { setSelectedChargeId(null); setArtworkOption(null); setArtworkFileName(""); }}
-                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
-                      >
-                        Remove
-                      </button>
+                      {chargesApplied > 0 && (
+                        <button
+                          onClick={() => setSavedWaivedChargeIds(allExtraCharges.map((c) => c.id))}
+                          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
+                        >
+                          Remove
+                        </button>
+                      )}
                     </span>
                     <span>{extraChargesTotal.toFixed(2)} USD</span>
                   </div>
                   {isChargesExpanded && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "6px", paddingLeft: "12px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                        <span>{artworkOption === "customise" ? "Artwork customisation" : "New artwork charge"}</span>
-                        <span>10.00 USD</span>
-                      </div>
+                      {allExtraCharges.map((charge) => {
+                        const isWaived = savedWaivedChargeIds.includes(charge.id);
+                        return (
+                          <div key={charge.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: isWaived ? "var(--cim-fg-muted, #94979b)" : "var(--cim-fg-subtle, #5f6469)" }}>
+                            <span style={{ textDecoration: isWaived ? "line-through" : "none" }}>{charge.label}</span>
+                            <span style={{ textDecoration: isWaived ? "line-through" : "none" }}>{charge.unitPrice.toFixed(2)} USD</span>
+                          </div>
+                        );
+                      })}
+                      {artworkOption !== null && (
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                          <span>{artworkOption === "customise" ? "Artwork customisation" : "New artwork charge"}</span>
+                          <span>10.00 USD</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1660,7 +1669,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                 </Button>
                 <Button variant="secondary" size="small" onPress={() => {
                   setModalWaivedIds([...savedWaivedChargeIds]);
-                  setWaiveReason("");
+                  setWaiveReason(savedWaiveReason);
                   setIsEditChargesOpen(true);
                 }}>
                   Edit applied charges
@@ -1693,7 +1702,8 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
 
         {/* Edit Applied Charges Modal */}
         {isEditChargesOpen && (() => {
-          const allCharges = product.extraCharges ?? [];
+          // Only show charges that haven't already been saved as waived
+          const allCharges = (product.extraCharges ?? []).filter((c) => !savedWaivedChargeIds.includes(c.id));
           const allWaived = allCharges.length > 0 && allCharges.every((c) => modalWaivedIds.includes(c.id));
           const someWaived = !allWaived && allCharges.some((c) => modalWaivedIds.includes(c.id));
           const waivedTotal = parseFloat(allCharges.filter((c) => modalWaivedIds.includes(c.id)).reduce((sum, c) => sum + c.unitPrice, 0).toFixed(2));
@@ -1741,7 +1751,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                     </div>
                     {/* Reason */}
                     <Select
-                      label="Reason for waiving off charge"
+                      label="Reason for waiving charge"
                       isRequired
                       selectedKey={waiveReason || null}
                       onSelectionChange={(key) => setWaiveReason(String(key))}
@@ -1767,7 +1777,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                           <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{newTotal.toFixed(2)} USD</span>
                         </div>
                         {savings > 0 && (
-                          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-success, #007e3f)" }}>{savings.toFixed(2)} USD in savings due to certain charges being waived off</span>
+                          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-success, #007e3f)" }}>{savings.toFixed(2)} USD in savings due to certain charges being waived</span>
                         )}
                       </>
                     ) : (
@@ -1783,6 +1793,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
                       isDisabled={!waiveReason.trim()}
                       onPress={() => {
                         setSavedWaivedChargeIds(modalWaivedIds);
+                        setSavedWaiveReason(waiveReason);
                         setIsEditChargesOpen(false);
                       }}
                     >

@@ -740,8 +740,8 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     maxOrderQty: 1000,
     stockQuantity: 5000,
     extraCharges: [
-      { id: "logo_change", label: "Logo Change", unitPrice: 10 },
-      { id: "setup_change", label: "Setup Change", unitPrice: 10 },
+      { id: "logo_change", label: "Logo Charge", unitPrice: 10 },
+      { id: "setup_change", label: "Setup Charge", unitPrice: 10 },
     ],
     taxRate: 5.33,
   },
