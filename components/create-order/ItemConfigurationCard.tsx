@@ -34,6 +34,7 @@ interface ItemConfigurationCardProps {
   onLineTotalChange?: (total: number) => void;
   onValidityChange?: (isValid: boolean) => void;
   onPriceBreakdownChange?: (breakdown: PriceBreakdown) => void;
+  onNotesChange?: (notes: string) => void;
 }
 
 export interface ItemConfigurationCardHandle {
@@ -277,7 +278,7 @@ function SwatchButton({
 }
 
 export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, ItemConfigurationCardProps>(
-  ({ product, initialValues, onAddToOrder, onLineTotalChange, onValidityChange, onPriceBreakdownChange }, ref) => {
+  ({ product, initialValues, onAddToOrder, onLineTotalChange, onValidityChange, onPriceBreakdownChange, onNotesChange }, ref) => {
     const attributesRef = useRef<HTMLDivElement>(null);
     const quantityRef = useRef<HTMLDivElement>(null);
     const artworkRef = useRef<HTMLDivElement>(null);
@@ -593,6 +594,59 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
       }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeOfferType, pctBasedInput, newPriceInput]);
+
+    // Auto-generate internal notes whenever price customization state changes
+    useEffect(() => {
+      if (!onNotesChange) return;
+      const lines: string[] = [];
+
+      // Offer customization
+      const hasPctOffer = activeOfferType === "pct" && parseFloat(pctBasedInput) > 0 && basePrice > 0;
+      const hasPriceOffer = activeOfferType === "price" && newPriceInput !== "" && !isNaN(parseFloat(newPriceInput)) && basePrice > 0;
+      if (hasPctOffer || hasPriceOffer) {
+        lines.push("[Offer customization]");
+        if (hasPctOffer) {
+          const pct = parseFloat(pctBasedInput);
+          const discAmt = parseFloat((basePrice * pct / 100).toFixed(2));
+          lines.push(`• Type: % Based pricing — ${pct}% discount`);
+          lines.push(`• Original price: ${basePrice.toFixed(2)} USD → New price: ${(basePrice - discAmt).toFixed(2)} USD`);
+          lines.push(`• Discount amount: ${discAmt.toFixed(2)} USD`);
+        } else if (hasPriceOffer) {
+          const newP = parseFloat(newPriceInput);
+          const discAmt = parseFloat((basePrice - newP).toFixed(2));
+          lines.push(`• Type: New price`);
+          lines.push(`• Item price: ${newP.toFixed(2)} USD (was ${basePrice.toFixed(2)} USD)`);
+          if (quantity > 0) lines.push(`• Unit price: ${(newP / quantity).toFixed(2)} USD`);
+          lines.push(`• Discount amount: ${discAmt.toFixed(2)} USD`);
+        }
+        if (overrideReason) {
+          const reasonLabel = overrideReason.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+          lines.push(`• Reason: ${reasonLabel}`);
+        }
+        lines.push("");
+      }
+
+      // Price override
+      if (savedPriceOverrideUnitPrice > 0 && quantity > 0) {
+        lines.push("[Price override]");
+        lines.push(`• Override unit price: ${savedPriceOverrideUnitPrice.toFixed(2)} USD/unit`);
+        lines.push(`• Total: ${(savedPriceOverrideUnitPrice * quantity).toFixed(2)} USD (was ${basePrice.toFixed(2)} USD)`);
+        if (priceOverrideReason) lines.push(`• Reason: ${priceOverrideReason}`);
+        lines.push("");
+      }
+
+      // Accessories
+      if (addedAccessories.length > 0) {
+        lines.push("[Accessories added]");
+        addedAccessories.forEach((acc) => {
+          lines.push(`• ${acc.label} × ${acc.quantity} — ${(acc.quantity * acc.unitPrice).toFixed(2)} USD`);
+        });
+        lines.push("");
+      }
+
+      onNotesChange(lines.join("\n").trimEnd());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeOfferType, pctBasedInput, newPriceInput, overrideReason, savedPriceOverrideUnitPrice, priceOverrideReason, addedAccessories, basePrice, quantity]);
 
     const handleSubmit = useCallback(() => {
       const item: DraftOrderItem = {

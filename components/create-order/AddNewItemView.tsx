@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Button, SearchField, Text, PopoverRoot, Popover } from "@cimpress-ui/react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Button, SearchField, Text, PopoverRoot, Popover, CopyInline, TextArea } from "@cimpress-ui/react";
+import { IconCopy, IconCheckCircleFill } from "@cimpress-ui/react/icons";
 import { AppBreadcrumbs } from "@/components/AppBreadcrumbs";
 import { IconArrowLeft } from "@cimpress-ui/react/icons";
 import type { ProductCatalogItem, DraftOrderItem } from "@/lib/types";
@@ -11,6 +12,7 @@ import type { Customer } from "@/lib/createOrderMockData";
 
 interface AddNewItemViewProps {
   customer: Customer;
+  selectedStore?: string;
   editingItem?: DraftOrderItem | null;
   onAddComplete: (item: DraftOrderItem) => void;
   onCancel: () => void;
@@ -53,7 +55,7 @@ const actionBtnStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function AddNewItemView({ customer, editingItem, onAddComplete, onCancel }: AddNewItemViewProps) {
+export function AddNewItemView({ customer, selectedStore, editingItem, onAddComplete, onCancel }: AddNewItemViewProps) {
   const isEditing = !!editingItem;
   const [query, setQuery] = useState(editingItem?.product.name ?? "");
   const [dropdownResults, setDropdownResults] = useState<ProductCatalogItem[]>([]);
@@ -62,18 +64,40 @@ export function AddNewItemView({ customer, editingItem, onAddComplete, onCancel 
   const [itemTotal, setItemTotal] = useState(editingItem?.lineTotal ?? 0);
   const [isValid, setIsValid] = useState(isEditing);
   const [priceBreakdown, setPriceBreakdown] = useState<PriceBreakdown | null>(null);
+  const [notesText, setNotesText] = useState("");
+  const [notesCopied, setNotesCopied] = useState(false);
+
+  const handleNotesChange = useCallback((autoNotes: string) => {
+    setNotesText(autoNotes);
+  }, []);
+
+  async function handleCopyNotes() {
+    if (!notesText) return;
+    try {
+      await navigator.clipboard.writeText(notesText);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = notesText;
+      el.style.cssText = "position:fixed;top:-9999px;opacity:0;";
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setNotesCopied(true);
+    setTimeout(() => setNotesCopied(false), 2000);
+  }
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputWrapperRef = useRef<HTMLDivElement>(null);
+  const searchAreaRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<ItemConfigurationCardHandle>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node) &&
-        inputWrapperRef.current &&
-        !inputWrapperRef.current.contains(e.target as Node)
+        searchAreaRef.current &&
+        !searchAreaRef.current.contains(e.target as Node)
       ) {
         setShowDropdown(false);
       }
@@ -118,23 +142,40 @@ export function AddNewItemView({ customer, editingItem, onAddComplete, onCancel 
           { label: "Dashboard", href: "/" },
           { label: "Customer management", href: "/customers" },
           { label: customer.name, href: "/customers/" + customer.id },
-          { label: "Create order", href: "/customers/" + customer.id + "/create-order" },
-          { label: isEditing ? "Edit item" : "Add new item" },
+          { label: "Create order" },
         ]} />
 
         {/* Title row */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <button
-              onClick={onCancel}
-              aria-label="Back"
-              style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", padding: "2px", color: "var(--cim-fg-base)", borderRadius: "4px", flexShrink: 0 }}
-            >
-              <IconArrowLeft />
-            </button>
-            <Text as="h1" variant="title-4">{isEditing ? "Edit item" : "Add new item"}</Text>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                onClick={onCancel}
+                aria-label="Back"
+                style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", padding: "2px", color: "var(--cim-fg-base)", borderRadius: "4px", flexShrink: 0 }}
+              >
+                <IconArrowLeft />
+              </button>
+              <Text as="h1" variant="title-4">Create order: Add item</Text>
+            </div>
+
+            {/* Customer info subtitle */}
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", paddingLeft: "26px" }}>
+              <Text as="span" variant="medium">{customer.name} ({customer.email})</Text>
+              <div style={{ width: "1px", height: "20px", background: "var(--cim-border-subtle, #eaebeb)", flexShrink: 0 }} />
+              <Text as="span" variant="medium">
+                Shopper ID: <CopyInline>{customer.shopperId}</CopyInline>
+              </Text>
+              {selectedStore && (
+                <>
+                  <div style={{ width: "1px", height: "20px", background: "var(--cim-border-subtle, #eaebeb)", flexShrink: 0 }} />
+                  <Text as="span" variant="medium">Store: {selectedStore}</Text>
+                </>
+              )}
+            </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
             <button style={actionBtnStyle} aria-label="Share this item">
               <ShareIcon />
               Share this item
@@ -142,105 +183,140 @@ export function AddNewItemView({ customer, editingItem, onAddComplete, onCancel 
           </div>
         </div>
 
-        {/* Search input with dropdown */}
-        <div style={{ position: "relative", width: "100%", maxWidth: "870px", margin: "0 auto" }} ref={inputWrapperRef}>
-          <SearchField
-            aria-label="Search for product"
-            placeholder="Search for product"
-            value={query}
-            onChange={handleQueryChange}
-            onClear={handleClearSearch}
-            onSubmit={() => {
-              if (dropdownResults.length > 0) handleProductSelect(dropdownResults[0]);
-            }}
-          />
+        {/* Main two-column layout */}
+        <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
 
-          {/* Dropdown results */}
-          {showDropdown && (
-            <div
-              ref={dropdownRef}
-              style={{
-                position: "absolute",
-                top: "calc(100% + 4px)",
-                left: 0,
-                right: 0,
-                background: "white",
-                border: "1px solid var(--cim-border-base, #dadcdd)",
-                borderRadius: "6px",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-                zIndex: 100,
-                maxHeight: "320px",
-                overflowY: "auto",
-              }}
-            >
-              {dropdownResults.map((product) => (
-                <button
-                  key={product.id}
-                  onClick={() => handleProductSelect(product)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    width: "100%",
-                    padding: "10px 16px",
-                    border: "none",
-                    background: "none",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    borderBottom: "1px solid var(--cim-border-subtle, #eaebeb)",
+          {/* Left column: search + item config */}
+          <div style={{
+            flex: "1 1 0",
+            minWidth: 0,
+            background: "white",
+            border: "1px solid var(--cim-border-base, #dadcdd)",
+            borderRadius: "var(--cim-radius-6, 6px)",
+            padding: "16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+          }}>
+            {/* Search input + inline results */}
+            <div ref={searchAreaRef} style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+              <div ref={inputWrapperRef}>
+                <SearchField
+                  aria-label="Search to add item"
+                  placeholder="Search to add item"
+                  value={query}
+                  onChange={handleQueryChange}
+                  onClear={handleClearSearch}
+                  onSubmit={() => {
+                    if (dropdownResults.length > 0) handleProductSelect(dropdownResults[0]);
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cim-bg-hover, #eef6fa)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                >
-                  <div style={{
-                    width: "40px",
-                    height: "40px",
-                    borderRadius: "4px",
-                    overflow: "hidden",
-                    flexShrink: 0,
-                    background: "var(--cim-bg-subtle, #f8f9fa)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}>
-                    {product.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={product.imageUrl} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : (
-                      <span style={{ fontSize: "0.625rem", color: "var(--cim-fg-muted)" }}>IMG</span>
-                    )}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500, color: "var(--cim-fg-base)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {product.name}
-                    </p>
-                    <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--cim-fg-subtle)", marginTop: "2px" }}>
-                      {product.category}
-                    </p>
-                  </div>
-                  <span style={{ fontSize: "0.8125rem", color: "var(--cim-fg-subtle)", flexShrink: 0, fontFamily: "monospace" }}>
-                    {product.id}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+                />
+              </div>
 
-        {/* Item configuration card */}
-        {selectedProduct && (
-          <div style={{ width: "100%", maxWidth: "870px", margin: "0 auto" }}>
-            <ItemConfigurationCard
-              ref={cardRef}
-              product={selectedProduct}
-              initialValues={editingItem?.product.id === selectedProduct.id ? editingItem : undefined}
-              onAddToOrder={onAddComplete}
-              onLineTotalChange={setItemTotal}
-              onValidityChange={setIsValid}
-              onPriceBreakdownChange={setPriceBreakdown}
+              {/* Inline results list */}
+              {showDropdown && (
+                <div
+                  ref={dropdownRef}
+                  style={{
+                    background: "white",
+                    borderRadius: "4px",
+                    boxShadow: "0px 1px 1.5px rgba(0,0,0,0.08), 0px 3px 4px rgba(0,0,0,0.06), 0px 4px 6px rgba(0,0,0,0.05), 0px 6px 8px rgba(0,0,0,0.04)",
+                    overflow: "hidden",
+                    marginTop: "8px",
+                  }}
+                >
+                  {dropdownResults.map((product, idx) => (
+                    <button
+                      key={product.id}
+                      onClick={() => handleProductSelect(product)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "16px",
+                        width: "100%",
+                        padding: "8px 16px",
+                        border: "none",
+                        background: idx === 0 ? "var(--cim-bg-subtle, #f8f9fa)" : "white",
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cim-bg-subtle, #f8f9fa)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = idx === 0 ? "var(--cim-bg-subtle, #f8f9fa)" : "white")}
+                    >
+                      <span style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {product.name}
+                      </span>
+                      <span style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)", flexShrink: 0 }}>
+                        {product.id}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Item configuration card */}
+            {selectedProduct && (
+              <ItemConfigurationCard
+                ref={cardRef}
+                product={selectedProduct}
+                initialValues={editingItem?.product.id === selectedProduct.id ? editingItem : undefined}
+                onAddToOrder={onAddComplete}
+                onLineTotalChange={setItemTotal}
+                onValidityChange={setIsValid}
+                onPriceBreakdownChange={setPriceBreakdown}
+                onNotesChange={handleNotesChange}
+              />
+            )}
+          </div>
+
+          {/* Right column: Internal notes */}
+          <div style={{
+            flexShrink: 0,
+            width: "320px",
+            position: "sticky",
+            top: "24px",
+            alignSelf: "flex-start",
+            background: "white",
+            border: "1px solid var(--cim-border-base, #dadcdd)",
+            borderRadius: "var(--cim-radius-6, 6px)",
+            padding: "16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+          }}>
+            {/* Header row */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+              <Text as="h2" variant="title-5">Internal notes</Text>
+              <button
+                onClick={handleCopyNotes}
+                disabled={!notesText}
+                aria-label="Copy notes"
+                style={{
+                  display: "flex", alignItems: "center", gap: "6px",
+                  background: "none", border: "none", cursor: notesText ? "pointer" : "default",
+                  padding: "4px 8px", borderRadius: "4px",
+                  fontSize: "0.875rem", color: notesCopied ? "var(--cim-fg-success, #007e3f)" : "var(--cim-fg-accent, #007798)",
+                  opacity: notesText ? 1 : 0.4,
+                }}
+              >
+                {notesCopied ? <IconCheckCircleFill /> : <IconCopy />}
+                {notesCopied ? "Copied" : "Copy"}
+              </button>
+            </div>
+
+            {/* Notes textarea */}
+            <TextArea
+              aria-label="Internal notes"
+              value={notesText}
+              onChange={setNotesText}
+              placeholder="Notes will be auto-populated when price customisations are applied. You can also type here."
+              rows={12}
             />
           </div>
-        )}
+
+        </div>
       </div>
 
       {/* Sticky footer */}
@@ -250,108 +326,97 @@ export function AddNewItemView({ customer, editingItem, onAddComplete, onCancel 
         left: 0,
         right: 0,
         background: "white",
-        borderTop: "1px solid var(--cim-border-subtle, #eaebeb)",
-        padding: "12px 24px",
+        borderTop: "1px solid var(--cim-border-base, #dadcdd)",
+        padding: "16px 24px",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
+        justifyContent: "space-between",
         zIndex: 50,
+        boxShadow: "0px 1px 1.5px rgba(0,0,0,0.08), 0px 3px 4px rgba(0,0,0,0.06), 0px 4px 6px rgba(0,0,0,0.05), 0px 6px 8px rgba(0,0,0,0.04)",
       }}>
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          width: "100%",
-          maxWidth: "870px",
-        }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            {/* Always derived from priceBreakdown so it's never stale */}
-            <span style={{ fontSize: "1rem", fontWeight: 600, color: (priceBreakdown?.totalDue ?? 0) > 0 ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)", whiteSpace: "nowrap" }}>
-              Item total {(priceBreakdown?.totalDue ?? itemTotal).toFixed(2)} USD
-            </span>
-            {priceBreakdown && (
-              <PopoverRoot>
-                <Button
-                  variant="tertiary"
-                  size="small"
-                  UNSAFE_style={{ padding: 0, fontSize: "0.875rem", textDecoration: "underline", minHeight: "unset", height: "auto" }}
-                >
-                  View details
-                </Button>
-                <Popover title="Item Price" placement="top">
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", minWidth: "300px" }}>
-                    {/* Base price */}
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                      <span>Price ({priceBreakdown.quantity} qty)</span>
-                      <span>{priceBreakdown.basePrice.toFixed(2)} USD</span>
-                    </div>
-                    {/* Selected extra charge — direct line */}
-                    {priceBreakdown.selectedChargeLabel && (
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                        <span>{priceBreakdown.selectedChargeLabel}</span>
-                        <span>{priceBreakdown.selectedChargePrice?.toFixed(2)} USD</span>
-                      </div>
-                    )}
-                    {/* Discount */}
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                      <span>Discount</span>
-                      <span style={{ color: "var(--cim-fg-muted, #94979b)" }}>0.00 USD</span>
-                    </div>
-                    {/* Artwork charge */}
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                      <span>{priceBreakdown.artworkOption === "customise" ? "Artwork customisation" : "New artwork"}</span>
-                      <span>10.00 USD</span>
-                    </div>
-                    {/* Accessories */}
-                    {priceBreakdown.accessories.length > 0 && (
-                      <>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                          <span>Accessories ({priceBreakdown.accessories.length})</span>
-                          <span>{priceBreakdown.accessoriesTotal.toFixed(2)} USD</span>
-                        </div>
-                        {priceBreakdown.accessories.map((acc) => (
-                          <div key={acc.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--cim-fg-subtle, #5f6469)", paddingLeft: "12px" }}>
-                            <span>{acc.label} × {acc.quantity}</span>
-                            <span>{(acc.quantity * acc.unitPrice).toFixed(2)} USD</span>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                    {/* Subtotal */}
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
-                      <span>Subtotal</span>
-                      <span>{priceBreakdown.subtotal.toFixed(2)} USD</span>
-                    </div>
-                    {/* Tax */}
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                      <span>Tax ({priceBreakdown.taxRate}%)</span>
-                      <span>{priceBreakdown.tax.toFixed(2)} USD</span>
-                    </div>
-                    <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)", margin: "4px 0" }} />
-                    {/* Total due */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                      <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base)" }}>Total due</span>
-                      <span style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
-                        {priceBreakdown.totalDue.toFixed(2)} USD
-                      </span>
-                    </div>
+        {/* Left: item total + view details */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+          <span style={{ fontSize: "1rem", fontWeight: 600, color: (priceBreakdown?.totalDue ?? 0) > 0 ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)", whiteSpace: "nowrap" }}>
+            Item total {(priceBreakdown?.totalDue ?? itemTotal).toFixed(2)} USD
+          </span>
+          {priceBreakdown ? (
+            <PopoverRoot>
+              <Button
+                variant="tertiary"
+                size="small"
+                UNSAFE_style={{ padding: 0, fontSize: "0.875rem", textDecoration: "underline", minHeight: "unset", height: "auto", color: "var(--cim-fg-muted, #94979b)" }}
+              >
+                View details
+              </Button>
+              <Popover title="Item Price" placement="top">
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", minWidth: "300px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                    <span>Price ({priceBreakdown.quantity} qty)</span>
+                    <span>{priceBreakdown.basePrice.toFixed(2)} USD</span>
                   </div>
-                </Popover>
-              </PopoverRoot>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: "12px" }}>
-            <Button variant="secondary" onPress={onCancel}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              isDisabled={!selectedProduct || !isValid}
-              onPress={() => cardRef.current?.submit()}
-            >
-              {isEditing ? "Save changes" : "Add item to cart"}
-            </Button>
-          </div>
+                  {priceBreakdown.selectedChargeLabel && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                      <span>{priceBreakdown.selectedChargeLabel}</span>
+                      <span>{priceBreakdown.selectedChargePrice?.toFixed(2)} USD</span>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                    <span>Discount</span>
+                    <span style={{ color: "var(--cim-fg-muted, #94979b)" }}>0.00 USD</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                    <span>{priceBreakdown.artworkOption === "customise" ? "Artwork customisation" : "New artwork"}</span>
+                    <span>10.00 USD</span>
+                  </div>
+                  {priceBreakdown.accessories.length > 0 && (
+                    <>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                        <span>Accessories ({priceBreakdown.accessories.length})</span>
+                        <span>{priceBreakdown.accessoriesTotal.toFixed(2)} USD</span>
+                      </div>
+                      {priceBreakdown.accessories.map((acc) => (
+                        <div key={acc.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--cim-fg-subtle, #5f6469)", paddingLeft: "12px" }}>
+                          <span>{acc.label} × {acc.quantity}</span>
+                          <span>{(acc.quantity * acc.unitPrice).toFixed(2)} USD</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base)" }}>
+                    <span>Subtotal</span>
+                    <span>{priceBreakdown.subtotal.toFixed(2)} USD</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                    <span>Tax ({priceBreakdown.taxRate}%)</span>
+                    <span>{priceBreakdown.tax.toFixed(2)} USD</span>
+                  </div>
+                  <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)", margin: "4px 0" }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base)" }}>Total due</span>
+                    <span style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
+                      {priceBreakdown.totalDue.toFixed(2)} USD
+                    </span>
+                  </div>
+                </div>
+              </Popover>
+            </PopoverRoot>
+          ) : (
+            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-muted, #94979b)", textDecoration: "underline" }}>View details</span>
+          )}
+        </div>
+
+        {/* Right: Cancel + Add item to cart */}
+        <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+          <Button variant="secondary" onPress={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            isDisabled={!selectedProduct || !isValid}
+            onPress={() => cardRef.current?.submit()}
+          >
+            {isEditing ? "Save changes" : "Add item to cart"}
+          </Button>
         </div>
       </div>
     </div>
