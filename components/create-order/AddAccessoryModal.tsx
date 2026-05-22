@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Button, ModalDialog, ModalDialogBody, ModalDialogActions, Select, SelectItem } from "@cimpress-ui/react";
+import { Button, ModalDialog, ModalDialogBody, ModalDialogActions } from "@cimpress-ui/react";
 import type { DraftOrderItemAccessory } from "@/lib/types";
 
 export interface AccessoryCatalogItem {
@@ -71,14 +71,6 @@ export const MOCK_ACCESSORIES: AccessoryCatalogItem[] = [
   },
 ];
 
-function generateQtyOptions(minQty: number, maxQty: number): number[] {
-  const opts = new Set<number>([0, minQty]);
-  const range = maxQty - minQty;
-  const step = range <= 50 ? 5 : range <= 200 ? 25 : range <= 500 ? 50 : 100;
-  for (let q = minQty; q <= maxQty; q += step) opts.add(q);
-  opts.add(maxQty);
-  return [...opts].filter((q) => q <= maxQty).sort((a, b) => a - b);
-}
 
 interface AccessoryCardProps {
   item: AccessoryCatalogItem;
@@ -96,15 +88,12 @@ export function AccessoryCard({ item, onAdd, isAdded = false, onRemove, mainItem
   }, [isAdded]);
 
   const effectiveMax = mainItemQty > 0 ? Math.min(item.maxQty, mainItemQty) : item.maxQty;
-  const isQtyDisabled = false;
 
   useEffect(() => {
     if (qty > effectiveMax) setQty(effectiveMax > 0 ? effectiveMax : 0);
   }, [effectiveMax, qty]);
 
-  const qtyOptions = generateQtyOptions(item.minQty, effectiveMax);
   const itemTotal = qty * item.unitPrice;
-  const hasQty = qty > 0;
 
   return (
     <div style={{
@@ -115,11 +104,9 @@ export function AccessoryCard({ item, onAdd, isAdded = false, onRemove, mainItem
       display: "flex",
       flexDirection: "column",
       boxShadow: "0px 1px 1px 0px rgba(0,0,0,0.08), 0px 1px 3px 0px rgba(0,0,0,0.04)",
-      flex: "1 0 0",
-      minWidth: 0,
     }}>
       {/* Card header */}
-      <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "4px" }}>
+      <div style={{ padding: "12px 8px", height: "64px", display: "flex", flexDirection: "column", gap: "4px", justifyContent: "center" }}>
         <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>
           {item.name}
         </span>
@@ -130,18 +117,18 @@ export function AccessoryCard({ item, onAdd, isAdded = false, onRemove, mainItem
 
       {/* Image */}
       <div style={{
-        height: "200px",
+        height: "120px",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         overflow: "hidden",
-        background: "var(--cim-bg-subtle, #f8f9fa)",
+        background: "white",
       }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={item.imageUrl}
           alt={item.name}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          style={{ height: "100px", width: "auto", objectFit: "contain" }}
         />
       </div>
 
@@ -150,61 +137,68 @@ export function AccessoryCard({ item, onAdd, isAdded = false, onRemove, mainItem
 
       {/* Pricing section */}
       <div style={{
-        padding: "16px",
+        padding: "8px",
         display: "flex",
         flexDirection: "column",
         gap: "16px",
         borderTop: "1px solid var(--cim-border-base, #dadcdd)",
         background: "white",
       }}>
-        {/* Quantity select */}
-        <Select
-          label="Quantity"
-          selectedKey={String(qty)}
-          onSelectionChange={(val) => setQty(Number(val))}
-          isDisabled={isQtyDisabled}
-        >
-          {qtyOptions.map((q) => (
-            <SelectItem key={String(q)} id={String(q)}>{q}</SelectItem>
-          ))}
-        </Select>
-
-        {/* Divider */}
-        <div style={{ height: "1px", background: "var(--cim-border-subtle, #eaebeb)" }} />
+        {/* Quantity input */}
+        <div style={{
+          background: "white",
+          border: "1px solid var(--cim-border-base, #dadcdd)",
+          borderRadius: "4px",
+          minHeight: "40px",
+          display: "flex",
+          alignItems: "center",
+          padding: "0 12px",
+        }}>
+          <input
+            type="number"
+            min={0}
+            max={effectiveMax}
+            value={qty === 0 ? "" : qty}
+            placeholder="0"
+            onChange={(e) => {
+              const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+              setQty(Math.min(val, effectiveMax));
+            }}
+            style={{
+              width: "100%",
+              border: "none",
+              outline: "none",
+              fontSize: "1rem",
+              color: qty > 0 ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-subtle, #5f6469)",
+              background: "transparent",
+              MozAppearance: "textfield",
+            } as React.CSSProperties}
+          />
+        </div>
 
         {/* Item total row */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
           <span style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>
             Item Total
           </span>
-          <span style={{
-            fontSize: "1rem",
-            fontWeight: 600,
-            color: (isAdded || hasQty) ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)",
-            lineHeight: "24px",
-          }}>
-            USD {itemTotal.toFixed(2)}
-          </span>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "1px" }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)", lineHeight: "16px" }}>
+              USD {item.unitPrice.toFixed(2)}/unit
+            </span>
+            <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>
+              USD {itemTotal.toFixed(2)}
+            </span>
+          </div>
         </div>
 
         {/* Add / Remove button */}
         {isAdded ? (
-          <button
-            onClick={() => onRemove?.()}
-            style={{
-              width: "100%",
-              padding: "8px 16px",
-              border: "1px solid var(--cim-fg-critical, #d10023)",
-              borderRadius: "4px",
-              background: "white",
-              color: "var(--cim-fg-critical, #d10023)",
-              fontSize: "1rem",
-              fontWeight: 500,
-              cursor: "pointer",
-            }}
+          <Button
+            tone="critical"
+            onPress={() => onRemove?.()}
           >
-            Remove item
-          </button>
+            Remove
+          </Button>
         ) : (
           <Button
             variant="secondary"
