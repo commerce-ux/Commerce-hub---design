@@ -967,17 +967,17 @@ const handleSubmit = useCallback(() => {
 
           {/* Item total row */}
           <div style={{ ...sectionCard, flexDirection: "column", gap: "16px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", width: "100%" }}>
               <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>Item total</span>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
-                <span style={{ fontSize: "1.25rem", fontWeight: 600, color: quantityInput ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)" }}>
-                  {quantityInput ? `${basePrice.toFixed(2)} USD` : "—"}
-                </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 {quantityInput && (
-                  <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                    {quantity} x {unitPrice.toFixed(2)} / unit
+                  <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "16px" }}>
+                    ({quantity} x {unitPrice.toFixed(2)} / unit)
                   </span>
                 )}
+                <span style={{ fontSize: "1rem", fontWeight: 600, color: quantityInput ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-muted, #94979b)", lineHeight: "24px" }}>
+                  {quantityInput ? `${basePrice.toFixed(2)} USD` : "—"}
+                </span>
               </div>
             </div>
             {/* Upsell nudge — always visible; disabled when no qty or no next tier */}
