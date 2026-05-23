@@ -1822,15 +1822,22 @@ const handleSubmit = useCallback(() => {
                 return (
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "12px" }}>
                     <span style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "28px" }}>Total due</span>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
+                        {hasDiscount && (
+                          <span style={{ fontSize: "1.125rem", fontWeight: 400, color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through", lineHeight: "28px" }}>
+                            {originalTotalDue.toFixed(2)} USD
+                          </span>
+                        )}
+                        <span style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "36px" }}>
+                          {totalDue.toFixed(2)} USD
+                        </span>
+                      </div>
                       {hasDiscount && (
-                        <span style={{ fontSize: "1.125rem", fontWeight: 400, color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through", lineHeight: "28px" }}>
-                          {originalTotalDue.toFixed(2)} USD
+                        <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--cim-fg-success, #007e3f)" }}>
+                          Total discount of {(originalTotalDue - totalDue).toFixed(2)} USD
                         </span>
                       )}
-                      <span style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "36px" }}>
-                        {totalDue.toFixed(2)} USD
-                      </span>
                     </div>
                   </div>
                 );
