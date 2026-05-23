@@ -1858,10 +1858,15 @@ const handleSubmit = useCallback(() => {
                 );
               })()}
 
-              {/* Warning callout — shown when discount exceeds 10% or price override requires approval */}
-              {(priceOverrideDiscountAmount > 0 || (savedOfferDiscountPct > 10 && priceOverrideDiscountAmount === 0)) && (
-                <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
-              )}
+              {/* Warning callout — shown when the actual combined discount rate exceeds 10% of item total */}
+              {(() => {
+                const itemBase = basePrice + accessoriesTotal;
+                const actualDiscountPct = itemBase > 0 ? (discountAmount / itemBase) * 100 : 0;
+                const showWarning = priceOverrideDiscountAmount > 0 || (discountAmount > 0 && actualDiscountPct > 10);
+                return showWarning ? (
+                  <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
+                ) : null;
+              })()}
 
             </div>
           </div>
