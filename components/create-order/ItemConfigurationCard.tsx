@@ -1577,11 +1577,11 @@ const handleSubmit = useCallback(() => {
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
                       <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", paddingTop: "4px" }}>new Item total</span>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
                           {hasAnyDiscount && (
-                            <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{origTotal.toFixed(2)}</span>
+                            <span style={{ fontSize: "1.125rem", fontWeight: 400, color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through", lineHeight: "28px" }}>{origTotal.toFixed(2)} USD</span>
                           )}
-                          <span style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--cim-fg-base, #15191d)" }}>{newTotal.toFixed(2)}</span>
+                          <span style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "36px" }}>{newTotal.toFixed(2)} USD</span>
                         </div>
                         {hasAnyDiscount && (
                           <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-success, #007e3f)", fontWeight: 500 }}>
