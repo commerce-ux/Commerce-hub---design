@@ -455,11 +455,26 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const priceOverrideDiscountAmount = savedPriceOverrideUnitPrice > 0 && quantity > 0
       ? parseFloat((basePrice - savedPriceOverrideUnitPrice * quantity).toFixed(2))
       : 0;
-    const discountAmount = priceOverrideDiscountAmount > 0
+    // Main item offer discount
+    const mainItemOfferDiscount = priceOverrideDiscountAmount > 0
       ? priceOverrideDiscountAmount
       : (savedNewPriceValid && savedNewPriceInput !== ""
         ? parseFloat((basePrice - savedNewPriceParsed).toFixed(2))
         : (savedOfferDiscountPct > 0 ? parseFloat((basePrice * savedOfferDiscountPct / 100).toFixed(2)) : 0));
+    // Per-accessory offer discounts (from Offer customization section)
+    const totalAccOfferDiscount = parseFloat(addedAccessories.reduce((sum, acc) => {
+      const aType = accOfferTypes[acc.id] ?? null;
+      const aOrigTotal = parseFloat((acc.quantity * (savedAccessoryOverridePrices[acc.id] ?? acc.unitPrice)).toFixed(2));
+      if (aType === "pct") {
+        const pct = parseFloat(accPctInputs[acc.id] ?? "");
+        if (pct > 0) return sum + parseFloat((aOrigTotal * pct / 100).toFixed(2));
+      } else if (aType === "price") {
+        const ip = parseFloat(accItemPriceInputs[acc.id] ?? "");
+        if (!isNaN(ip) && ip >= 0) return sum + parseFloat((aOrigTotal - ip).toFixed(2));
+      }
+      return sum;
+    }, 0).toFixed(2));
+    const discountAmount = parseFloat((mainItemOfferDiscount + totalAccOfferDiscount).toFixed(2));
     const subtotal = parseFloat((basePrice - discountAmount + extraChargesTotal + accessoriesTotal).toFixed(2));
     const taxRate = product.taxRate ?? 8;
     const tax = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
