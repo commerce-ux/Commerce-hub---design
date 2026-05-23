@@ -1814,12 +1814,27 @@ const handleSubmit = useCallback(() => {
               <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)" }} />
 
               {/* Total due */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "28px" }}>Total due</span>
-                <span style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "36px" }}>
-                  {totalDue.toFixed(2)} USD
-                </span>
-              </div>
+              {(() => {
+                const originalSubtotal = parseFloat((basePrice + extraChargesTotal + accessoriesTotal).toFixed(2));
+                const originalTax = parseFloat((originalSubtotal * (taxRate / 100)).toFixed(2));
+                const originalTotalDue = parseFloat((originalSubtotal + originalTax).toFixed(2));
+                const hasDiscount = discountAmount > 0 || priceOverrideDiscountAmount > 0;
+                return (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "12px" }}>
+                    <span style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "28px" }}>Total due</span>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
+                      {hasDiscount && (
+                        <span style={{ fontSize: "1.125rem", fontWeight: 400, color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through", lineHeight: "28px" }}>
+                          {originalTotalDue.toFixed(2)} USD
+                        </span>
+                      )}
+                      <span style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "36px" }}>
+                        {totalDue.toFixed(2)} USD
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Warning callout — shown when discount exceeds 10% or price override requires approval */}
               {(priceOverrideDiscountAmount > 0 || (savedOfferDiscountPct > 10 && priceOverrideDiscountAmount === 0)) && (
