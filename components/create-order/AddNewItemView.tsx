@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button, SearchField, Text, PopoverRoot, Popover, CopyInline, TextArea } from "@cimpress-ui/react";
 import { IconCopy, IconCheckCircleFill } from "@cimpress-ui/react/icons";
 import { AppBreadcrumbs } from "@/components/AppBreadcrumbs";
@@ -66,10 +66,6 @@ export function AddNewItemView({ customer, selectedStore, editingItem, onAddComp
   const [priceBreakdown, setPriceBreakdown] = useState<PriceBreakdown | null>(null);
   const [notesText, setNotesText] = useState("");
   const [notesCopied, setNotesCopied] = useState(false);
-
-  const handleNotesChange = useCallback((autoNotes: string) => {
-    setNotesText(autoNotes);
-  }, []);
 
   async function handleCopyNotes() {
     if (!notesText) return;
@@ -266,7 +262,6 @@ export function AddNewItemView({ customer, selectedStore, editingItem, onAddComp
                 onLineTotalChange={setItemTotal}
                 onValidityChange={setIsValid}
                 onPriceBreakdownChange={setPriceBreakdown}
-                onNotesChange={handleNotesChange}
               />
             )}
           </div>
@@ -311,8 +306,7 @@ export function AddNewItemView({ customer, selectedStore, editingItem, onAddComp
               aria-label="Internal notes"
               value={notesText}
               onChange={setNotesText}
-              placeholder="Notes will be auto-populated when price customisations are applied. You can also type here."
-              rows={12}
+                            rows={12}
             />
           </div>
 

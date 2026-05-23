@@ -7,6 +7,12 @@
       "runtimeArgs": ["/Users/priyankaparab/Desktop/claude/commerce-hub/serve-static.js"],
       "port": 3845,
       "autoPort": true
+    },
+    {
+      "name": "Commerce Hub (dev)",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["/Users/priyankaparab/Desktop/claude/commerce-hub/.claude/start-dev.sh"],
+      "port": 3000
     }
   ]
 }

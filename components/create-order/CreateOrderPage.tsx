@@ -187,6 +187,7 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
     return (
       <AddNewItemView
         customer={customer}
+        selectedStore={selectedStore || undefined}
         editingItem={editingItem}
         onAddComplete={handleAddToOrder}
         onCancel={() => { setView("cart"); setEditingItem(null); }}

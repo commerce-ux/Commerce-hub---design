@@ -1,18 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import NextLink from "next/link";
 import {
-  Button, SearchField, Text, IconButton,
-  Card, CardHeader, CardContent,
-  Stack, Disclosure, Badge,
+  Button, TextField, Text, IconButton,
+  Stack, Badge, Drawer, DrawerBody, DrawerActions,
 } from "@cimpress-ui/react";
 import { AppBreadcrumbs } from "./AppBreadcrumbs";
-import {
-  IconChevronRightBold,
-  IconChevronDownBold,
-  IconInfoCircle,
-} from "@cimpress-ui/react/icons";
+import { IconAddCircle } from "@cimpress-ui/react/icons";
 import { CUSTOMER_DATABASE, getTotalOrders } from "@/lib/createOrderMockData";
 import type { Customer } from "@/lib/createOrderMockData";
 import { generateNameVariants } from "@/lib/customerUtils";
@@ -40,240 +35,233 @@ function searchCustomers(
   name: string,
   email: string,
   phone: string,
-  customerNumber: string,
-  zip: string,
+  accountNumber: string,
+  postalCode: string,
+  orderNumber: string,
+  quoteId: string,
 ): Customer[] {
   const n  = name.trim().toLowerCase();
   const e  = email.trim().toLowerCase();
   const p  = phone.trim();
-  const cn = customerNumber.trim().toLowerCase();
-  const z  = zip.trim();
+  const an = accountNumber.trim().toLowerCase();
+  const z  = postalCode.trim();
 
   // Name-only: return all variants of the matched base customer (existing behaviour)
-  if (n && !e && !p && !cn && !z) {
+  if (n && !e && !p && !an && !z) {
     const matched = CUSTOMER_DATABASE.filter(c => c.name.toLowerCase().includes(n));
     if (matched.length > 0) return generateNameVariants(matched[0]);
     return [];
   }
 
-  // All other searches: filter the full pool (real + variants) so that data
-  // seen in name-search results is also findable via email / ID / phone / zip.
+  // All other searches: filter the full pool (real + variants)
   return buildSearchPool().filter((c) => {
-    const nameOk   = !n  || c.name.toLowerCase().includes(n);
-    const emailOk  = !e  || c.email.toLowerCase() === e;
-    const phoneOk  = !p  || c.phone === p;
-    const numberOk = !cn || c.id.toLowerCase() === cn || c.shopperId.toLowerCase() === cn;
-    const zipOk    = !z  || c.addresses.some(a => a.zipcode.includes(z));
+    const nameOk    = !n  || c.name.toLowerCase().includes(n);
+    const emailOk   = !e  || c.email.toLowerCase() === e;
+    const phoneOk   = !p  || c.phone === p;
+    const numberOk  = !an || c.id.toLowerCase() === an || c.shopperId.toLowerCase() === an;
+    const zipOk     = !z  || c.addresses.some(a => a.zipcode.includes(z));
     return nameOk && emailOk && phoneOk && numberOk && zipOk;
   });
 }
 
-function hasAnyInput(name: string, email: string, phone: string, customerNumber: string, zip: string) {
-  return name.trim() || email.trim() || phone.trim() || customerNumber.trim() || zip.trim();
+function hasAnyInput(name: string, email: string, phone: string, accountNumber: string, postalCode: string, orderNumber: string, quoteId: string) {
+  return name.trim() || email.trim() || phone.trim() || accountNumber.trim() || postalCode.trim() || orderNumber.trim() || quoteId.trim();
 }
 
 // ── Table layout constants ─────────────────────────────────────────────────────
-const CUSTOMER_COLS = "repeat(7, 1fr)";
+const COLS = "1.5fr 1.5fr 1.2fr 0.6fr 0.6fr";
 
-// Per-cell padding
-const CELL: React.CSSProperties = { padding: "0 12px", minWidth: 0, overflow: "hidden" };
-const CELL_RIGHT: React.CSSProperties = { ...CELL, textAlign: "right" };
-const CELL_CENTER: React.CSSProperties = { ...CELL, display: "flex", alignItems: "center", justifyContent: "flex-end" };
-const headerCellStyle: React.CSSProperties = {
-  padding: "0 12px",
-  textAlign: "left",
-  whiteSpace: "nowrap",
-};
+const CELL: React.CSSProperties = { padding: "0 16px", minWidth: 0, overflow: "hidden" };
+const CELL_RIGHT: React.CSSProperties = { ...CELL };
+const headerCellStyle: React.CSSProperties = { padding: "0 16px", textAlign: "left", whiteSpace: "nowrap" };
 
-const gridBase = (cols: string): React.CSSProperties => ({
+const gridRow = (cols: string, bg = "white"): React.CSSProperties => ({
   display: "grid",
   gridTemplateColumns: cols,
   alignItems: "center",
-  height: "40px",
+  height: "48px",
+  background: bg,
 });
 
-function customerRowStyle(index: number): React.CSSProperties {
-  return {
-    ...gridBase(CUSTOMER_COLS),
-    borderTop: "1px solid var(--cim-border-base, #dadcdd)",
-    background: index % 2 === 0 ? "white" : "var(--cim-bg-subtle, #f8f9fa)",
-  };
-}
-
-
-// ── Address cards ─────────────────────────────────────────────────────────────
-function AddressRows({ customer }: { customer: Customer }) {
-  const isOrg = customer.type === "org";
-
-  return (
-    <div style={{
-      background: "white",
-      borderTop: "1px solid var(--cim-border-base, #dadcdd)",
-      borderBottom: "1px solid var(--cim-border-subtle, #eaebeb)",
-      padding: "16px",
-    }}>
-      <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
-        {customer.addresses.map((addr, idx) => (
-          <div key={addr.id} style={{
-            background: "white",
-            border: "1px solid var(--cim-border-base, #dadcdd)",
-            borderRadius: "var(--cim-radius-6, 6px)",
-            padding: "16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-            flexShrink: 0,
-            width: "241px",
-          }}>
-            {/* Address label + lines */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <Text as="span" variant="small-semibold" tone="subtle">Address {idx + 1}</Text>
-              <div>
-                <Text as="p" variant="medium">{addr.address},</Text>
-                <Text as="p" variant="medium">{addr.city}, {addr.state} {addr.zipcode},</Text>
-                <Text as="p" variant="medium">{addr.country}</Text>
-              </div>
-            </div>
-
-            {/* Order count */}
-            {addr.orderCount > 0 ? (
-              <Text as="p" variant="medium">
-                <strong>{addr.orderCount}</strong>{" Previous orders"}
-              </Text>
-            ) : (
-              <Text as="p" variant="medium" tone="muted">No previous orders</Text>
-            )}
-
-            {/* Divider + Create order link — child customers only */}
-            {!isOrg && (
-              <>
-                <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)", margin: "0 -16px" }} />
-                <NextLink href={`/customers/${customer.id}/create-order?country=${encodeURIComponent(addr.country)}&addressId=${encodeURIComponent(addr.id)}`} style={{ color: "var(--cim-fg-accent, #007798)", fontSize: "14px" }}>Create order</NextLink>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── Results table ──────────────────────────────────────────────────────────────
-function ResultsTable({ results }: { results: Customer[] }) {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(
-    () => results.length === 1 ? new Set([results[0].id]) : new Set()
-  );
+function ResultsTable({ results, count }: { results: Customer[]; count: number }) {
+  const [drawerCustomer, setDrawerCustomer] = useState<Customer | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>("");
 
-  // Re-sync whenever results change (e.g. a second search without unmounting)
-  useEffect(() => {
-    setExpandedIds(results.length === 1 ? new Set([results[0].id]) : new Set());
-  }, [results]);
+  function openDrawer(c: Customer) {
+    setDrawerCustomer(c);
+    setSelectedAddressId(c.addresses[0]?.id ?? "");
+  }
 
-  function toggleExpand(id: string) {
-    setExpandedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  function closeDrawer() {
+    setDrawerCustomer(null);
+    setSelectedAddressId("");
+  }
+
+  function confirmAddress() {
+    if (!drawerCustomer || !selectedAddressId) return;
+    const addr = drawerCustomer.addresses.find((a) => a.id === selectedAddressId);
+    window.location.href = `/customers/${drawerCustomer.id}/create-order?country=${encodeURIComponent(addr?.country ?? "")}&addressId=${encodeURIComponent(selectedAddressId)}`;
   }
 
   return (
-    <div style={{
-      border: "1px solid var(--cim-border-subtle, #eaebeb)",
-      borderRadius: "var(--cim-radius-4, 4px)",
-      overflow: "hidden",
-    }}>
-      {/* Customer table header */}
-      <div style={{
-        ...gridBase(CUSTOMER_COLS),
-        background: "var(--cim-bg-subtle, #f8f9fa)",
-        borderBottom: "1px solid var(--cim-border-base, #dadcdd)",
-      }}>
-        <div style={headerCellStyle}><Text as="span" variant="medium-semibold">Name</Text></div>
-        <div style={headerCellStyle}><Text as="span" variant="medium-semibold">Email ID</Text></div>
-        <div style={headerCellStyle}><Text as="span" variant="medium-semibold">Customer ID</Text></div>
-        <div style={headerCellStyle}><Text as="span" variant="medium-semibold">Phone</Text></div>
-        <div style={headerCellStyle}><Text as="span" variant="medium-semibold">Customer type</Text></div>
-        <div style={{ ...headerCellStyle, textAlign: "right" }}><Text as="span" variant="medium-semibold">Total orders</Text></div>
-        <div />
+    <div>
+      {/* Above-table row: count + Filters / Edit columns */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+        <Text as="p" variant="body-semibold">{count} search result{count !== 1 ? "s" : ""}</Text>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <Button variant="tertiary" size="small">Filters</Button>
+          <Button variant="tertiary" size="small">Edit columns</Button>
+        </div>
       </div>
 
-      {/* Customer rows */}
-      {results.map((c, rowIdx) => {
-        const isExpanded = expandedIds.has(c.id);
-        const total = getTotalOrders(c);
-        return (
-          <div key={c.id}>
-            {/* Customer row */}
-            <div style={customerRowStyle(rowIdx)}>
-              <div style={CELL}>
-                <Text as="span" variant="medium"><NextLink href={`/customers/${c.id}`} style={{ color: "var(--cim-fg-accent, #007798)" }}>{c.name}</NextLink></Text>
+      {/* Table */}
+      <div style={{ border: "1px solid var(--cim-border-subtle, #eaebeb)", borderRadius: "var(--cim-radius-4, 4px)", overflow: "hidden" }}>
+
+        {/* Header */}
+        <div style={{ ...gridRow(COLS, "var(--cim-bg-subtle, #f8f9fa)"), borderBottom: "1px solid var(--cim-border-base, #dadcdd)" }}>
+          <div style={headerCellStyle}><Text as="span" variant="medium-semibold">Name</Text></div>
+          <div style={headerCellStyle}><Text as="span" variant="medium-semibold">Email ID</Text></div>
+          <div style={headerCellStyle}><Text as="span" variant="medium-semibold">Account number</Text></div>
+          <div style={headerCellStyle}><Text as="span" variant="medium-semibold">Orders</Text></div>
+          <div style={headerCellStyle}><Text as="span" variant="medium-semibold">Actions</Text></div>
+        </div>
+
+        {/* Rows */}
+        {results.map((c) => {
+          const total = getTotalOrders(c);
+          const isOrg = c.type === "org";
+          return (
+            <div key={c.id} style={{ ...gridRow(COLS), borderTop: "1px solid var(--cim-border-subtle, #eaebeb)" }}>
+              <div style={{ ...CELL, display: "flex", alignItems: "center", gap: "8px" }}>
+                <NextLink href={`/customers/${c.id}`} style={{ color: "var(--cim-fg-accent, #007798)", fontSize: "1rem" }}>{c.name}</NextLink>
+                {isOrg && <Badge tone="warning">Org</Badge>}
               </div>
               <div style={CELL}>
-                <Text as="span" variant="medium">{c.email}</Text>
+                <Text as="span" variant="medium" UNSAFE_style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{c.email}</Text>
               </div>
               <div style={CELL}>
-                <Text as="span" variant="medium" UNSAFE_style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{c.id}</Text>
-              </div>
-              <div style={CELL}>
-                <Text as="span" variant="medium" UNSAFE_style={{ whiteSpace: "nowrap" }}>{c.phone}</Text>
-              </div>
-              <div style={CELL}>
-                <Badge tone={c.type === "org" ? "warning" : "info"}>
-                  {c.type === "org" ? "Org" : "Child"}
-                </Badge>
+                <Text as="span" variant="medium">{c.id}</Text>
               </div>
               <div style={CELL_RIGHT}>
-                <Text as="span" variant="medium" tone={total === 0 ? "muted" : "base"}>{total}</Text>
+                {total > 0 ? (
+                  <NextLink href={`/customers/${c.id}`} style={{ color: "var(--cim-fg-accent, #007798)", fontSize: "1rem" }}>{total}</NextLink>
+                ) : (
+                  <Text as="span" variant="medium" tone="muted">—</Text>
+                )}
               </div>
-              <div style={CELL_CENTER}>
-                <IconButton
-                  aria-label={isExpanded ? `Collapse ${c.name}` : `Expand ${c.name}`}
-                  icon={isExpanded ? <IconChevronDownBold /> : <IconChevronRightBold />}
-                  variant="tertiary"
-                  size="medium"
-                  onPress={() => toggleExpand(c.id)}
-                />
+              <div style={{ ...CELL, display: "flex", alignItems: "center" }}>
+                {!isOrg && (
+                  <IconButton
+                    aria-label={`Create order for ${c.name}`}
+                    icon={<IconAddCircle />}
+                    variant="tertiary"
+                    size="medium"
+                    onPress={() => openDrawer(c)}
+                  />
+                )}
               </div>
             </div>
+          );
+        })}
+      </div>
 
-            {/* Expanded address rows */}
-            {isExpanded && <AddressRows customer={c} />}
+      {/* Address selection drawer */}
+      <Drawer
+        title="Select Address to create order"
+        size="medium"
+        isOpen={drawerCustomer !== null}
+        onOpenChange={(open) => { if (!open) closeDrawer(); }}
+      >
+        <DrawerBody>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {drawerCustomer?.addresses.map((addr, idx) => {
+              const isSelected = selectedAddressId === addr.id;
+              const isPrimary = idx === 0;
+              return (
+                <div
+                  key={addr.id}
+                  onClick={() => setSelectedAddressId(addr.id)}
+                  style={{
+                    border: `1px solid ${isSelected ? "var(--cim-border-accent, #0091b8)" : "var(--cim-border-base, #dadcdd)"}`,
+                    background: isSelected ? "var(--cim-bg-subtle, #f8f9fa)" : "white",
+                    borderRadius: "var(--cim-radius-6, 6px)",
+                    padding: "12px 16px",
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                  }}
+                >
+                  {/* Radio + name + Primary badge */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{
+                      width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
+                      background: isSelected ? "var(--cim-bg-accent, #0281a1)" : "white",
+                      border: isSelected ? "none" : "1px solid var(--cim-fg-base, #15191d)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {isSelected && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "white" }} />}
+                    </div>
+                    <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
+                      {drawerCustomer.name}
+                    </span>
+                    {isPrimary && <Badge tone="warning">Primary</Badge>}
+                  </div>
+
+                  {/* Address lines */}
+                  <div style={{ fontSize: "1rem", lineHeight: "24px", color: "var(--cim-fg-base, #15191d)" }}>
+                    <p style={{ marginBottom: "12px" }}>{addr.address},</p>
+                    <p style={{ marginBottom: "12px" }}>{addr.city}, {addr.state}</p>
+                    <p>{addr.zipcode}, {addr.country}</p>
+                  </div>
+
+                  {/* Edit link */}
+                  <a href="#" style={{ color: "var(--cim-fg-accent, #007798)", fontSize: "1rem", textDecoration: "underline" }}>Edit</a>
+
+                  {/* Divider */}
+                  <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)" }} />
+
+                  {/* Orders in previous 30 days */}
+                  <p style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                    Orders in previous 30 days: <strong>{addr.orderCount > 0 ? "YES" : "NO"}</strong>
+                  </p>
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
+        </DrawerBody>
+        <DrawerActions>
+          <Button variant="secondary" onPress={closeDrawer}>Cancel</Button>
+          <Button variant="primary" isDisabled={!selectedAddressId} onPress={confirmAddress}>
+            Confirm Address to create order
+          </Button>
+        </DrawerActions>
+      </Drawer>
     </div>
   );
 }
 
 // ── Page component ─────────────────────────────────────────────────────────────
 export function CustomerManagementPage() {
-  const [name, setName]                     = useState("");
-  const [email, setEmail]                   = useState("");
-  const [phone, setPhone]                   = useState("");
-  const [customerNumber, setCustomerNumber] = useState("");
-  const [zip, setZip]                       = useState("");
-  const [results, setResults]               = useState<Customer[]>([]);
-  const [searched, setSearched]             = useState(false);
+  const [name, setName]                   = useState("");
+  const [email, setEmail]                 = useState("");
+  const [phone, setPhone]                 = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [postalCode, setPostalCode]       = useState("");
+  const [orderNumber, setOrderNumber]     = useState("");
+  const [quoteId, setQuoteId]             = useState("");
+  const [results, setResults]             = useState<Customer[]>([]);
+  const [searched, setSearched]           = useState(false);
 
   function handleSearch() {
-    if (!hasAnyInput(name, email, phone, customerNumber, zip)) return;
-    setResults(searchCustomers(name, email, phone, customerNumber, zip));
+    if (!hasAnyInput(name, email, phone, accountNumber, postalCode, orderNumber, quoteId)) return;
+    setResults(searchCustomers(name, email, phone, accountNumber, postalCode, orderNumber, quoteId));
     setSearched(true);
   }
 
-  function handleClear() {
-    setName(""); setEmail(""); setPhone("");
-    setCustomerNumber(""); setZip("");
-    setResults([]); setSearched(false);
-  }
-
-  function validateEmail(val: string) {
-    if (val && !val.includes("@")) return "Please enter a valid email address";
-  }
-  function validatePhone(val: string) {
-    if (val && /[a-zA-Z]/.test(val)) return "Phone number must contain numbers only";
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") handleSearch();
   }
 
   return (
@@ -281,99 +269,79 @@ export function CustomerManagementPage() {
       <Stack gap={24} UNSAFE_style={{ padding: "24px" }}>
         <AppBreadcrumbs items={[
           { label: "Dashboard", href: "/" },
-          { label: "Customer search" },
+          { label: "Search" },
         ]} />
 
-        {/* Search card */}
-        <Card>
-          <CardHeader title="Find Customer" />
-          <CardContent>
-            <Stack gap={16}>
+        {/* Search form — plain white container, no card title */}
+        <div style={{
+          background: "white",
+          borderRadius: "var(--cim-radius-6, 6px)",
+          padding: "12px",
+          boxShadow: "0px 1px 1px rgba(0,0,0,0.08), 0px 2px 2px rgba(0,0,0,0.06), 0px 4px 4px rgba(0,0,0,0.04)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px",
+        }}>
 
-              {/* Primary fields */}
-              <Stack gap={16} direction="horizontal" align="start">
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <SearchField
-                    aria-label="Customer name" placeholder="Customer name"
-                    value={name} onChange={setName} onSubmit={handleSearch} onClear={() => setName("")}
+          {/* Row 1: Customer name, Email, Account number, Order number, Quote ID */}
+          <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
+            {[
+              { label: "Customer name",  value: name,          setter: setName },
+              { label: "Email",          value: email,         setter: setEmail },
+              { label: "Account number", value: accountNumber, setter: setAccountNumber },
+              { label: "Order number",   value: orderNumber,   setter: setOrderNumber },
+              { label: "Quote ID",       value: quoteId,       setter: setQuoteId },
+            ].map(({ label, value, setter }) => (
+              <div key={label} style={{ flex: 1, minWidth: 0 }} onKeyDown={handleKeyDown}>
+                <TextField
+                  aria-label={label}
+                  placeholder={label}
+                  value={value}
+                  onChange={setter}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Row 2: Postal code, Phone (left) + Search button (right) */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", gap: "16px" }}>
+              {[
+                { label: "Postal code", value: postalCode, setter: setPostalCode },
+                { label: "Phone",       value: phone,      setter: setPhone },
+              ].map(({ label, value, setter }) => (
+                <div key={label} style={{ width: "250px" }} onKeyDown={handleKeyDown}>
+                  <TextField
+                    aria-label={label}
+                    placeholder={label}
+                    value={value}
+                    onChange={setter}
                   />
                 </div>
-                <Stack gap={8} direction="horizontal" align="center" UNSAFE_style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <SearchField
-                      aria-label="Customer number/ID" placeholder="Customer number/ID"
-                      value={customerNumber} onChange={setCustomerNumber} onSubmit={handleSearch} onClear={() => setCustomerNumber("")}
-                    />
-                  </div>
-                  <span style={{ color: "var(--cim-fg-subtle, #5f6469)", flexShrink: 0 }}>
-                    <IconInfoCircle />
-                  </span>
-                </Stack>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <SearchField
-                    aria-label="Email ID" placeholder="Email ID"
-                    value={email} onChange={setEmail} onSubmit={handleSearch} onClear={() => setEmail("")}
-                    validate={validateEmail}
-                  />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <SearchField
-                    aria-label="Phone number" placeholder="Phone number"
-                    value={phone} onChange={setPhone} onSubmit={handleSearch} onClear={() => setPhone("")}
-                    validate={validatePhone} inputMode="tel"
-                  />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <SearchField
-                    aria-label="Zip code" placeholder="Zip code"
-                    value={zip} onChange={setZip} onSubmit={handleSearch} onClear={() => setZip("")}
-                  />
-                </div>
-              </Stack>
+              ))}
+            </div>
+            <Button variant="primary" onPress={handleSearch}>Search</Button>
+          </div>
 
-              {/* More fields disclosure */}
-              <Disclosure title="More search fields" variant="subtle">
-                <Stack gap={16} direction="horizontal" align="start" UNSAFE_style={{ paddingTop: "12px" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <SearchField aria-label="City" placeholder="City" onSubmit={handleSearch} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <SearchField aria-label="Country" placeholder="Country" onSubmit={handleSearch} />
-                  </div>
-                  <div style={{ flex: 3 }} />
-                </Stack>
-              </Disclosure>
-
-              {/* Actions */}
-              <Stack gap={16} direction="horizontal" justify="end">
-                <Button variant="tertiary" onPress={handleClear}>Clear</Button>
-                <Button variant="primary" onPress={handleSearch}>Search</Button>
-              </Stack>
-
-            </Stack>
-          </CardContent>
-        </Card>
+        </div>
 
         {/* Results */}
         {searched && (
           results.length === 0 ? (
-            <Card>
-              <CardContent>
-                <Stack gap={8} align="center" UNSAFE_style={{ padding: "16px", textAlign: "center" }}>
-                  <Text as="p" variant="body-semibold" tone="warning">No results</Text>
-                  <Text as="p" variant="body" tone="warning">
-                    There are no customers that match your search. Please check and try again.
-                  </Text>
-                </Stack>
-              </CardContent>
-            </Card>
-          ) : (
-            <Stack gap={12}>
-              <Text as="p" variant="body-semibold">
-                {results.length} search result{results.length !== 1 ? "s" : ""} found
+            <div style={{
+              background: "white",
+              borderRadius: "var(--cim-radius-6, 6px)",
+              padding: "24px",
+              boxShadow: "0px 1px 1px rgba(0,0,0,0.08), 0px 2px 2px rgba(0,0,0,0.06)",
+              textAlign: "center",
+            }}>
+              <Text as="p" variant="body-semibold" tone="warning">No results</Text>
+              <Text as="p" variant="body" tone="warning">
+                There are no customers that match your search. Please check and try again.
               </Text>
-              <ResultsTable results={results} />
-            </Stack>
+            </div>
+          ) : (
+            <ResultsTable results={results} count={results.length} />
           )
         )}
       </Stack>
