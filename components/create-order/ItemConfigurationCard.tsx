@@ -347,6 +347,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [showAllAccessories, setShowAllAccessories] = useState(false);
     const [isChargesExpanded, setIsChargesExpanded] = useState(false);
     const [isAccessoriesExpanded, setIsAccessoriesExpanded] = useState(false);
+    const [isCustomizedOfferExpanded, setIsCustomizedOfferExpanded] = useState(false);
     const [accOfferTypes, setAccOfferTypes] = useState<Record<string, "pct" | "price" | null>>({});
     const [accPctInputs, setAccPctInputs] = useState<Record<string, string>>({});
     const [accItemPriceInputs, setAccItemPriceInputs] = useState<Record<string, string>>({});
@@ -1612,7 +1613,7 @@ const handleSubmit = useCallback(() => {
               {/* Base price */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
                 <span>
-                  Price{savedPriceOverrideUnitPrice > 0 && quantity > 0
+                  Item Price{savedPriceOverrideUnitPrice > 0 && quantity > 0
                     ? ` (${quantity} qty × ${unitPrice.toFixed(2)} unit)`
                     : ""}
                 </span>
@@ -1655,31 +1656,6 @@ const handleSubmit = useCallback(() => {
                       )}
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* Customized offer — only shown when a pct discount has been saved (no price override active) */}
-              {discountAmount > 0 && priceOverrideDiscountAmount === 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    {savedNewPriceValid && savedNewPriceInput !== ""
-                      ? "Customized offer (New price)"
-                      : `Customized offer (${savedOfferDiscountPct}% Discount)`}
-                    <button
-                      onClick={() => {
-                        setSavedOfferDiscountPct(0);
-                        setSavedNewPriceInput("");
-                        setOfferDiscountPct(0);
-                        setPctBasedInput("");
-                        setNewPriceInput("");
-                        setNewUnitPriceInput("");
-                      }}
-                      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
-                    >
-                      Remove
-                    </button>
-                  </span>
-                  <span style={{ color: "var(--cim-fg-accent, #007798)" }}>- {discountAmount.toFixed(2)} USD</span>
                 </div>
               )}
 
@@ -1766,6 +1742,62 @@ const handleSubmit = useCallback(() => {
                 </div>
               )}
 
+              {/* Customized offer — only shown when a pct/price discount has been saved (no price override active) */}
+              {discountAmount > 0 && priceOverrideDiscountAmount === 0 && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <button
+                        onClick={() => setIsCustomizedOfferExpanded((v) => !v)}
+                        style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}
+                      >
+                        Customized offer
+                        <span style={{ display: "flex", color: "var(--cim-fg-subtle, #5f6469)", transform: isCustomizedOfferExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>
+                          <IconChevronDown size={16} />
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSavedOfferDiscountPct(0);
+                          setSavedNewPriceInput("");
+                          setOfferDiscountPct(0);
+                          setPctBasedInput("");
+                          setNewPriceInput("");
+                          setNewUnitPriceInput("");
+                          setActiveOfferType(null);
+                          setIsCustomizedOfferExpanded(false);
+                        }}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", alignItems: "center" }}
+                      >
+                        <IconTrash size={16} />
+                      </button>
+                    </span>
+                    <span style={{ color: "var(--cim-fg-success, #007e3f)" }}>- {discountAmount.toFixed(2)} USD</span>
+                  </div>
+                  {isCustomizedOfferExpanded && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "6px", paddingLeft: "12px" }}>
+                      {savedNewPriceValid && savedNewPriceInput !== "" ? (
+                        <>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                            <span>New item price</span>
+                            <span>{parseFloat(savedNewPriceInput).toFixed(2)} USD</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                            <span>Discount</span>
+                            <span>−{discountAmount.toFixed(2)} USD</span>
+                          </div>
+                        </>
+                      ) : savedOfferDiscountPct > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                          <span>Discount ({savedOfferDiscountPct}%)</span>
+                          <span>−{discountAmount.toFixed(2)} USD</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Subtotal */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
                 <span>Subtotal</span>
@@ -1805,14 +1837,6 @@ const handleSubmit = useCallback(() => {
                 </Button>
               </div>
 
-              {/* Admin approval warning — shown when price override is active */}
-              {priceOverrideDiscountAmount > 0 && (
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", border: "1px solid #f59e0b", borderRadius: "6px", padding: "12px 16px" }}>
-                  <span style={{ color: "#f59e0b", fontSize: "1.125rem", flexShrink: 0 }}>⚠</span>
-                  <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>This price will require admin approval</span>
-                </div>
-              )}
-
               {/* Divider */}
               <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)" }} />
 
@@ -1823,6 +1847,11 @@ const handleSubmit = useCallback(() => {
                   {totalDue.toFixed(2)} USD
                 </span>
               </div>
+
+              {/* Warning callout — shown when discount exceeds 10% or price override requires approval */}
+              {(priceOverrideDiscountAmount > 0 || (savedOfferDiscountPct > 10 && priceOverrideDiscountAmount === 0)) && (
+                <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
+              )}
 
             </div>
           </div>
