@@ -1810,33 +1810,6 @@ const handleSubmit = useCallback(() => {
                 <span>{tax.toFixed(2)} USD</span>
               </div>
 
-              {/* Action buttons */}
-              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                <Button variant="secondary" size="small" onPress={() => {
-                  setPriceOverrideUnitPrice(unitPrice.toFixed(2));
-                  setPriceOverrideQty(quantity > 0 ? String(quantity) : "");
-                  setPriceOverrideReason("");
-                  const initAcc: Record<string, string> = {};
-                  const initAccQty: Record<string, string> = {};
-                  addedAccessories.forEach((a) => {
-                    initAcc[a.id] = a.unitPrice.toFixed(2);
-                    initAccQty[a.id] = String(a.quantity);
-                  });
-                  setPriceOverrideAccessoryPrices(initAcc);
-                  setPriceOverrideAccessoryQuantities(initAccQty);
-                  setIsPriceOverrideOpen(true);
-                }}>
-                  Price override
-                </Button>
-                <Button variant="secondary" size="small" onPress={() => {
-                  setModalWaivedIds([...savedWaivedChargeIds]);
-                  setWaiveReason(savedWaiveReason);
-                  setIsEditChargesOpen(true);
-                }}>
-                  Edit applied charges
-                </Button>
-              </div>
-
               {/* Divider */}
               <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)" }} />
 
