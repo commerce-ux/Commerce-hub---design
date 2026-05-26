@@ -3,17 +3,15 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Checkbox, Button, Disclosure, AlertDialog, AlertDialogBody, AlertDialogActions,
-  TextField, Select, SelectItem, ModalDialog, ModalDialogBody,
+  TextField, ModalDialog, ModalDialogBody,
 } from "@cimpress-ui/react";
 import {
   IconTrash,
   IconPencil,
   IconMenuMoreVertical,
   IconCheckCircleFill,
-  IconInfoCircle,
 } from "@cimpress-ui/react/icons";
 import type { DraftOrderItem } from "@/lib/types";
-import { generateGuideQuantities } from "@/lib/pricingUtils";
 import { Toast } from "@/components/Toast";
 
 interface OrderItemsListProps {
@@ -386,24 +384,18 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
                                       {/* Quantity + stock */}
                                       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                        <Select
+                                        <TextField
                                           label="Quantity"
-                                          selectedKey={String(sizeQty)}
-                                          description={`Size: ${size}`}
-                                          onSelectionChange={(val) => {
-                                            const n = Number(val);
-                                            if (n >= 0) onSizeQuantityChange?.(item.draftItemId, size, n);
+                                          value={sizeQty > 0 ? String(sizeQty) : ""}
+                                          onChange={(val) => {
+                                            const n = parseInt(val, 10);
+                                            if (!isNaN(n) && n >= 0) onSizeQuantityChange?.(item.draftItemId, size, n);
+                                            else if (val === "") onSizeQuantityChange?.(item.draftItemId, size, 0);
                                           }}
-                                        >
-                                          {(() => {
-                                            const maxOpt = stock ?? Math.min(item.product.maxOrderQty, 500);
-                                            const opts: number[] = [];
-                                            for (let q = 1; q <= maxOpt; q++) opts.push(q);
-                                            return opts.map((q) => (
-                                              <SelectItem key={String(q)} id={String(q)}>{q}</SelectItem>
-                                            ));
-                                          })()}
-                                        </Select>
+                                          description={`Size: ${size}`}
+                                          type="number"
+                                          isInvalid={stock !== undefined && sizeQty > stock}
+                                        />
                                         {stock !== undefined && (
                                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                             <span style={{ color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-success, #007e3f)", display: "flex" }}>
@@ -556,40 +548,19 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
                           {/* Quantity field + stock */}
                           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <div style={{ minWidth: 0 }}>
-                                <Select
-                                  label="Quantity"
-                                  selectedKey={String(item.quantity)}
-                                  onSelectionChange={(val) => {
-                                    const n = Number(val);
-                                    if (n > 0) onQuantityChange?.(item.draftItemId, n);
-                                  }}
-                                  description={`Qty has to be between ${item.product.minOrderQty} - ${item.product.maxOrderQty}`}
-                                  isDisabled={!onQuantityChange}
-                                >
-                                  {generateGuideQuantities(item.product.pricingTiers, item.product.minOrderQty, item.product.maxOrderQty).map((q) => {
-                                      const overStock = stockQty != null && q > stockQty;
-                                      return (
-                                        <SelectItem key={String(q)} id={String(q)} isDisabled={overStock}>
-                                          {q}{overStock ? " (out of stock)" : ""}
-                                        </SelectItem>
-                                      );
-                                    })}
-                                </Select>
-                              </div>
-                              <button
-                                aria-label="Quantity information"
-                                style={{
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                  background: "none", border: "none", cursor: "pointer",
-                                  color: "var(--cim-fg-subtle, #5f6469)", padding: "4px",
-                                  marginTop: "20px", flexShrink: 0,
-                                }}
-                              >
-                                <IconInfoCircle size={24} />
-                              </button>
-                            </div>
+                            <TextField
+                              label="Quantity"
+                              value={item.quantity > 0 ? String(item.quantity) : ""}
+                              onChange={(val) => {
+                                const n = parseInt(val, 10);
+                                if (!isNaN(n) && n > 0) onQuantityChange?.(item.draftItemId, n);
+                                else if (val === "" && onQuantityChange) onQuantityChange(item.draftItemId, item.product.minOrderQty);
+                              }}
+                              description={`Qty has to be between ${item.product.minOrderQty} - ${item.product.maxOrderQty}`}
+                              isDisabled={!onQuantityChange}
+                              type="number"
+                              isInvalid={item.quantity < item.product.minOrderQty || item.quantity > item.product.maxOrderQty}
+                            />
                             {stockQty != null && (() => {
                               const overStock = item.quantity > 0 && item.quantity > stockQty;
                               return (

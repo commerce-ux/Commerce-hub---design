@@ -897,14 +897,22 @@ const handleSubmit = useCallback(() => {
                     isInvalid={quantityInput !== "" && (isNaN(parseInt(quantityInput)) || parseInt(quantityInput) < product.minOrderQty || parseInt(quantityInput) > product.maxOrderQty)}
                     error={quantityInput !== "" && parseInt(quantityInput, 10) < product.minOrderQty ? `Minimum is ${product.minOrderQty}` : quantityInput !== "" && parseInt(quantityInput, 10) > product.maxOrderQty ? `Maximum is ${product.maxOrderQty}` : undefined}
                   />
-                  <button
-                    onClick={() => setIsQtyInfoOpen((o) => !o)}
-                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--cim-fg-accent, #007798)", fontSize: "0.875rem", textDecoration: "underline", alignSelf: "flex-start" }}
-                  >
-                    View pricing guide
-                  </button>
-                  {isQtyInfoOpen && (
-                    <div style={{ border: "1px solid var(--cim-border-subtle, #eaebeb)", borderRadius: "4px", overflow: "hidden" }}>
+                  {effectiveStock !== undefined && (
+                    (() => {
+                      const overStock = quantity > 0 && quantity > effectiveStock;
+                      return (
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-success, #007e3f)", display: "flex" }}>
+                            <IconCheckCircleFill />
+                          </span>
+                          <span style={{ fontSize: "0.875rem", color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-base, #15191d)" }}>
+                            In stock - {effectiveStock}
+                          </span>
+                        </div>
+                      );
+                    })()
+                  )}
+                  <div style={{ border: "1px solid var(--cim-border-subtle, #eaebeb)", borderRadius: "4px", overflow: "hidden" }}>
                       <div ref={pricingGuideScrollRef} style={{ maxHeight: "200px", overflowY: "auto", scrollbarWidth: "thin" }}>
                         {sortedTiersAll.map((row) => {
                           const isSelected = pricingGuideSelected === row.qty || quantity === row.qty;
@@ -943,22 +951,6 @@ const handleSubmit = useCallback(() => {
                         })}
                       </div>
                     </div>
-                  )}
-                  {effectiveStock !== undefined && (
-                    (() => {
-                      const overStock = quantity > 0 && quantity > effectiveStock;
-                      return (
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-success, #007e3f)", display: "flex" }}>
-                            <IconCheckCircleFill />
-                          </span>
-                          <span style={{ fontSize: "0.875rem", color: overStock ? "var(--cim-fg-critical, #d10023)" : "var(--cim-fg-base, #15191d)" }}>
-                            In stock - {effectiveStock}
-                          </span>
-                        </div>
-                      );
-                    })()
-                  )}
                 </div>
               )}
 
