@@ -9,8 +9,20 @@ import { resolvePricingTier as resolveTier, computeIncrementRanges, generateGuid
 import { PreviousArtworkModal } from "./PreviousArtworkModal";
 import { AccessoryCard, MOCK_ACCESSORIES } from "./AddAccessoryModal";
 
+export interface OfferCustomizationBreakdown {
+  type: "pct" | "unit" | "flat";
+  typeName: string;       // "% Based pricing" | "Unit price discount" | "Flat price discount"
+  inputLabel: string;     // "Discount percentage" | "New unit price" | "New flat item price"
+  inputValue: string;     // "10%" | "1.30 USD" | "130.00 USD"
+  newItemPrice: number | null;
+  discountAmount: number | null;
+  reason: string;         // reason key e.g. "loyalty_discount"
+  reasonLabel: string;    // "Loyalty discount"
+}
+
 export interface PriceBreakdown {
   quantity: number;
+  unitPrice: number;
   basePrice: number;
   discount: number;
   chargesApplied: number;
@@ -21,10 +33,12 @@ export interface PriceBreakdown {
   artworkOption: "new" | "customise";
   accessoriesTotal: number;
   accessories: { id: string; label: string; quantity: number; unitPrice: number }[];
+  charges: { label: string; price: number }[];
   subtotal: number;
   taxRate: number;
   tax: number;
   totalDue: number;
+  offerCustomization?: OfferCustomizationBreakdown;
 }
 
 interface ItemConfigurationCardProps {
@@ -164,6 +178,21 @@ function ContextualPricingGrid({
   );
 }
 
+const OFFER_REASON_LABELS: Record<string, string> = {
+  loyalty_discount: "Loyalty discount",
+  bulk_deal: "Bulk deal",
+  promotional: "Promotional offer",
+  error_correction: "Error correction",
+  manager_approval: "Manager approval",
+  other: "Other",
+};
+
+const OFFER_TYPE_META: Record<"pct" | "unit" | "flat", { typeName: string; inputLabel: string }> = {
+  pct:  { typeName: "% Based pricing",     inputLabel: "Discount percentage" },
+  unit: { typeName: "Unit price discount",  inputLabel: "New unit price" },
+  flat: { typeName: "Flat price discount",  inputLabel: "New flat item price" },
+};
+
 const sectionCard: React.CSSProperties = {
   border: "1px solid var(--cim-border-base, #dadcdd)",
   borderRadius: "6px",
@@ -192,10 +221,12 @@ const radioInputStyle: React.CSSProperties = {
 // ── Artwork preview (shared between New artwork + Customise as before) ─────────
 function ArtworkPreview({
   fileName,
+  thumbnailUrl,
   onRemove,
   onChanges,
 }: {
   fileName: string;
+  thumbnailUrl?: string;
   onRemove: () => void;
   onChanges?: () => void;
 }) {
@@ -211,7 +242,7 @@ function ArtworkPreview({
       }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=300&h=300&fit=crop"
+          src={thumbnailUrl ?? "https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=300&h=300&fit=crop"}
           alt={fileName}
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
@@ -308,6 +339,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
       initialValues ? (initialValues.artworkType === "upload" ? "new" : "customise") : null
     );
     const [artworkFileName, setArtworkFileName] = useState<string>(initialValues?.artworkFileName ?? "");
+    const [artworkThumbnailUrl, setArtworkThumbnailUrl] = useState<string>("");
     const [isArtworkModalOpen, setIsArtworkModalOpen] = useState(false);
     const waitingForStudio = useRef(false);
 
@@ -348,7 +380,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [isChargesExpanded, setIsChargesExpanded] = useState(false);
     const [isAccessoriesExpanded, setIsAccessoriesExpanded] = useState(false);
     const [isCustomizedOfferExpanded, setIsCustomizedOfferExpanded] = useState(false);
-    const [accOfferTypes, setAccOfferTypes] = useState<Record<string, "pct" | "price" | null>>({});
+    const [accOfferTypes, setAccOfferTypes] = useState<Record<string, "pct" | "unit" | "flat" | null>>({});
     const [accPctInputs, setAccPctInputs] = useState<Record<string, string>>({});
     const [accItemPriceInputs, setAccItemPriceInputs] = useState<Record<string, string>>({});
     const [accUnitPriceInputs, setAccUnitPriceInputs] = useState<Record<string, string>>({});
@@ -358,7 +390,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [pctBasedInput, setPctBasedInput] = useState<string>(initDiscount > 0 ? String(initDiscount) : "");
     const [overrideReason, setOverrideReason] = useState<string>("");
     const [offerDiscountPct, setOfferDiscountPct] = useState<number>(initDiscount);
-    const [activeOfferType, setActiveOfferType] = useState<"pct" | "price" | null>(null);
+    const [activeOfferType, setActiveOfferType] = useState<"pct" | "unit" | "flat" | null>(null);
     const [savedOfferDiscountPct, setSavedOfferDiscountPct] = useState<number>(initDiscount);
     const [savedNewPriceInput, setSavedNewPriceInput] = useState<string>("");
     const [isPriceOverrideOpen, setIsPriceOverrideOpen] = useState(false);
@@ -458,9 +490,15 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     // Main item offer discount
     const mainItemOfferDiscount = priceOverrideDiscountAmount > 0
       ? priceOverrideDiscountAmount
-      : (savedNewPriceValid && savedNewPriceInput !== ""
-        ? parseFloat((basePrice - savedNewPriceParsed).toFixed(2))
-        : (savedOfferDiscountPct > 0 ? parseFloat((basePrice * savedOfferDiscountPct / 100).toFixed(2)) : 0));
+      : (() => {
+          if (savedOfferDiscountPct > 0 && activeOfferType === "pct")
+            return parseFloat((basePrice * savedOfferDiscountPct / 100).toFixed(2));
+          if (savedNewPriceInput !== "" && (activeOfferType === "unit" || activeOfferType === "flat")) {
+            const p = parseFloat(savedNewPriceInput);
+            if (!isNaN(p) && p >= 0) return parseFloat((basePrice - p).toFixed(2));
+          }
+          return 0;
+        })();
     // Per-accessory offer discounts (from Offer customization section)
     const totalAccOfferDiscount = parseFloat(addedAccessories.reduce((sum, acc) => {
       const aType = accOfferTypes[acc.id] ?? null;
@@ -468,7 +506,10 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
       if (aType === "pct") {
         const pct = parseFloat(accPctInputs[acc.id] ?? "");
         if (pct > 0) return sum + parseFloat((aOrigTotal * pct / 100).toFixed(2));
-      } else if (aType === "price") {
+      } else if (aType === "unit") {
+        const up = parseFloat(accUnitPriceInputs[acc.id] ?? "");
+        if (!isNaN(up) && acc.quantity > 0) return sum + parseFloat((aOrigTotal - up * acc.quantity).toFixed(2));
+      } else if (aType === "flat") {
         const ip = parseFloat(accItemPriceInputs[acc.id] ?? "");
         if (!isNaN(ip) && ip >= 0) return sum + parseFloat((aOrigTotal - ip).toFixed(2));
       }
@@ -506,8 +547,51 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
 
     useEffect(() => {
       onLineTotalChange?.(totalDue);
+
+      // Compute offer customization to surface in notes template
+      let offerCustomization: OfferCustomizationBreakdown | undefined;
+      if (activeOfferType !== null) {
+        const meta = OFFER_TYPE_META[activeOfferType];
+        let inputValue = "";
+        let newItemPriceVal: number | null = null;
+        let discountAmountVal: number | null = null;
+        if (activeOfferType === "pct") {
+          const pct = parseFloat(pctBasedInput);
+          inputValue = pctBasedInput ? `${pctBasedInput}%` : "";
+          if (!isNaN(pct) && pct > 0 && basePrice > 0) {
+            discountAmountVal = parseFloat((basePrice * pct / 100).toFixed(2));
+            newItemPriceVal = parseFloat((basePrice - discountAmountVal).toFixed(2));
+          }
+        } else if (activeOfferType === "unit") {
+          const up = parseFloat(newUnitPriceInput);
+          inputValue = newUnitPriceInput ? `${parseFloat(newUnitPriceInput).toFixed(2)} USD` : "";
+          if (!isNaN(up) && quantity > 0) {
+            newItemPriceVal = parseFloat((up * quantity).toFixed(2));
+            discountAmountVal = basePrice > 0 ? parseFloat((basePrice - newItemPriceVal).toFixed(2)) : null;
+          }
+        } else if (activeOfferType === "flat") {
+          const p = parseFloat(newPriceInput);
+          inputValue = newPriceInput ? `${parseFloat(newPriceInput).toFixed(2)} USD` : "";
+          if (!isNaN(p)) {
+            newItemPriceVal = parseFloat(p.toFixed(2));
+            discountAmountVal = basePrice > 0 ? parseFloat((basePrice - p).toFixed(2)) : null;
+          }
+        }
+        offerCustomization = {
+          type: activeOfferType,
+          typeName: meta.typeName,
+          inputLabel: meta.inputLabel,
+          inputValue,
+          newItemPrice: newItemPriceVal,
+          discountAmount: discountAmountVal,
+          reason: overrideReason,
+          reasonLabel: OFFER_REASON_LABELS[overrideReason] ?? overrideReason,
+        };
+      }
+
       onPriceBreakdownChange?.({
         quantity,
+        unitPrice,
         basePrice,
         discount: discountAmount,
         chargesApplied,
@@ -518,13 +602,20 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
         artworkOption: artworkOption ?? "new",
         accessoriesTotal,
         accessories: addedAccessories.map((a) => ({ id: a.id, label: a.label, quantity: a.quantity, unitPrice: a.unitPrice })),
+        charges: [
+          ...allExtraCharges
+            .filter((c) => !savedWaivedChargeIds.includes(c.id))
+            .map((c) => ({ label: c.label, price: c.unitPrice })),
+          ...(artworkOption !== null ? [{ label: "Artwork charge", price: 10 }] : []),
+        ],
         subtotal,
         taxRate,
         tax,
         totalDue,
+        offerCustomization,
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [totalDue, onLineTotalChange, onPriceBreakdownChange]);
+    }, [totalDue, onLineTotalChange, onPriceBreakdownChange, activeOfferType, overrideReason]);
 
     useEffect(() => {
       onValidityChange?.(isValid);
@@ -540,6 +631,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
       setQuantityInput(initialValues?.quantity != null ? String(initialValues.quantity) : "");
       setArtworkOption(initialValues ? (initialValues.artworkType === "upload" ? "new" : "customise") : null);
       setArtworkFileName(initialValues?.artworkFileName ?? "");
+      setArtworkThumbnailUrl("");
       setSelectedChargeId(null);
       setPricingGuideSelected(null);
       setAddedAccessories(initialValues?.accessories ?? []);
@@ -556,7 +648,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
       setAccPctInputs({});
       setAccItemPriceInputs({});
       setAccUnitPriceInputs({});
-      setActiveOfferType(null);
+      setActiveOfferType(null as "pct" | "unit" | "flat" | null);
       setOverrideReason("");
       setSavedPriceOverrideUnitPrice(0);
       setPriceOverrideUnitPrice("");
@@ -600,7 +692,13 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
         const pct = parseFloat(pctBasedInput) || 0;
         setSavedOfferDiscountPct(pct);
         setSavedNewPriceInput("");
-      } else if (activeOfferType === "price") {
+      } else if (activeOfferType === "unit") {
+        const up = parseFloat(newUnitPriceInput);
+        if (!isNaN(up) && up >= 0 && quantity > 0) {
+          setSavedNewPriceInput((up * quantity).toFixed(2));
+          setSavedOfferDiscountPct(0);
+        }
+      } else if (activeOfferType === "flat") {
         const p = parseFloat(newPriceInput);
         if (!isNaN(p) && p >= 0) {
           setSavedNewPriceInput(newPriceInput);
@@ -608,7 +706,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
         }
       }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeOfferType, pctBasedInput, newPriceInput]);
+    }, [activeOfferType, pctBasedInput, newPriceInput, newUnitPriceInput, quantity]);
 
 const handleSubmit = useCallback(() => {
       const item: DraftOrderItem = {
@@ -712,7 +810,7 @@ const handleSubmit = useCallback(() => {
                     const currentVal = selectedAttributes.find((a) => a.attributeId === attr.id)?.selectedOptionId ?? "";
                     if (attr.type === "color") {
                       return (
-                        <div key={attr.id} style={{ width: "100%" }}>
+                        <div key={attr.id} style={{ maxWidth: "463px" }}>
                           <Select
                             label={attr.label}
                             selectedKey={currentVal}
@@ -1039,7 +1137,7 @@ const handleSubmit = useCallback(() => {
                 </span>
               </div>
               <Button
-                variant="tertiary"
+                variant="secondary"
                 size="small"
                 onPress={() => { setArtworkOption("customise"); setIsArtworkModalOpen(true); }}
               >
@@ -1054,7 +1152,7 @@ const handleSubmit = useCallback(() => {
                 <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-critical, #d10023)" }}>*</span>
               </div>
               {artworkFileName ? (
-                <ArtworkPreview fileName={artworkFileName} onRemove={() => setArtworkFileName("")} onChanges={() => setIsArtworkModalOpen(true)} />
+                <ArtworkPreview fileName={artworkFileName} thumbnailUrl={artworkThumbnailUrl || undefined} onRemove={() => { setArtworkFileName(""); setArtworkThumbnailUrl(""); }} onChanges={() => setIsArtworkModalOpen(true)} />
               ) : (
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                   <a
@@ -1178,11 +1276,21 @@ const handleSubmit = useCallback(() => {
           }}>
             {/* Section heading */}
             <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--cim-border-subtle, #eaebeb)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                <p style={{ ...sectionHeading, margin: 0 }}>Offer customization</p>
-                <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                  ( Choose any of the options to customise the current item price of {basePrice > 0 ? `${basePrice.toFixed(2)} USD` : "0.00 USD"} )
-                </span>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
+                <div>
+                  <p style={{ ...sectionHeading, margin: "0 0 2px" }}>Customise offer</p>
+                  <span style={{ fontSize: "0.75rem", lineHeight: "16px", color: "var(--cim-fg-base, #15191d)" }}>
+                    Choose any of the options to customise the current item price of {basePrice > 0 ? `${basePrice.toFixed(2)} USD` : "0.00 USD"}
+                  </span>
+                </div>
+                {activeOfferType !== null && (
+                  <button
+                    onClick={() => { setActiveOfferType(null); setPctBasedInput(""); setNewPriceInput(""); setNewUnitPriceInput(""); }}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", flexShrink: 0, whiteSpace: "nowrap" }}
+                  >
+                    Clear selection
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1194,16 +1302,8 @@ const handleSubmit = useCallback(() => {
                   {product.imageUrl ? <img src={product.imageUrl} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", background: "var(--cim-bg-subtle)" }} />}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2px" }}>
+                  <div style={{ marginBottom: "2px" }}>
                     <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{product.name}</p>
-                    {activeOfferType !== null && (
-                      <button
-                        onClick={() => { setActiveOfferType(null); setPctBasedInput(""); setNewPriceInput(""); setNewUnitPriceInput(""); }}
-                        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", flexShrink: 0 }}
-                      >
-                        Clear selection
-                      </button>
-                    )}
                   </div>
                   <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
                     Original price {basePrice > 0 ? `${basePrice.toFixed(2)} USD` : "—"}{quantity > 0 ? ` (${quantity} x ${unitPrice.toFixed(2)}/unit)` : ""}
@@ -1214,28 +1314,34 @@ const handleSubmit = useCallback(() => {
               <RadioGroup
                 value={activeOfferType ?? ""}
                 onChange={(v) => {
-                  setActiveOfferType(v as "pct" | "price");
-                  if (v === "price" && !newPriceInput && basePrice > 0) {
-                    setNewPriceInput(basePrice.toFixed(2));
+                  const next = v as "pct" | "unit" | "flat";
+                  setActiveOfferType(next);
+                  if (next === "unit" && !newUnitPriceInput && unitPrice > 0) {
                     setNewUnitPriceInput(unitPrice.toFixed(2));
+                  }
+                  if (next === "flat" && !newPriceInput && basePrice > 0) {
+                    setNewPriceInput(basePrice.toFixed(2));
                   }
                 }}
                 aria-label="Main item offer type"
                 direction="horizontal"
+                UNSAFE_style={{ "--cim-stack-gap-sm": "48px" } as React.CSSProperties}
               >
                 <Radio value="pct">% Based pricing</Radio>
-                <Radio value="price">New price</Radio>
+                <Radio value="unit">Unit price discount</Radio>
+                <Radio value="flat">Flat price discount</Radio>
               </RadioGroup>
 
+              {/* % Based pricing panel */}
               {activeOfferType === "pct" && (() => {
                 const pct = parseFloat(pctBasedInput);
                 const discountAmt = pct > 0 && basePrice > 0 ? parseFloat((basePrice * pct / 100).toFixed(2)) : NaN;
                 const newItemPrice = !isNaN(discountAmt) ? parseFloat((basePrice - discountAmt).toFixed(2)) : NaN;
-                const showPctWarning = pct > 10;
+                const showWarning = pct > 10;
                 return (
                   <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
-                      <div style={{ flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
+                      <div style={{ flex: "1 1 0" }}>
                         <TextField
                           label="Discount Percentage"
                           value={pctBasedInput}
@@ -1243,86 +1349,27 @@ const handleSubmit = useCallback(() => {
                           type="number"
                           suffix="%"
                           description="Will require approval for more than 10% discount"
-                        />
-                      </div>
-                      <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
-                        <div style={{ width: "180px" }}>
-                          <TextField
-                            label="New item price"
-                            value={!isNaN(newItemPrice) ? newItemPrice.toFixed(2) : ""}
-                            placeholder="0.00"
-                            prefix="USD"
-                            isReadOnly
-                          />
-                        </div>
-                        <div style={{ width: "180px" }}>
-                          <TextField
-                            label="Discount"
-                            value={!isNaN(discountAmt) ? discountAmt.toFixed(2) : ""}
-                            placeholder="0.00"
-                            prefix="USD"
-                            isReadOnly
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    {showPctWarning && (
-                      <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {activeOfferType === "price" && (() => {
-                const parsedItemPrice = newPriceInput !== "" ? parseFloat(newPriceInput) : NaN;
-                const discountAmt = !isNaN(parsedItemPrice) && basePrice > 0
-                  ? parseFloat((basePrice - parsedItemPrice).toFixed(2))
-                  : NaN;
-                return (
-                  <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
-                      <div style={{ flex: "1 1 180px" }}>
-                        <TextField
-                          label="Item price"
-                          value={newPriceInput}
-                          onChange={(val) => {
-                            setNewPriceInput(val);
-                            const p = parseFloat(val);
-                            if (!isNaN(p) && quantity > 0) setNewUnitPriceInput((p / quantity).toFixed(2));
-                            else if (val === "") setNewUnitPriceInput("");
+                          onKeyDown={(e) => {
+                            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                            e.preventDefault();
+                            const cur = parseFloat(pctBasedInput) || 0;
+                            const next = Math.max(0, Math.min(100, parseFloat((cur + (e.key === "ArrowUp" ? 0.01 : -0.01)).toFixed(2))));
+                            const s = next.toFixed(2);
+                            setPctBasedInput(s);
+                            setOfferDiscountPct(next);
                           }}
-                          type="number"
-                          prefix="USD"
-                          isInvalid={newPriceInvalid}
-                          placeholder={basePrice.toFixed(2)}
                         />
                       </div>
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", paddingTop: "32px", flexShrink: 0 }}>=</span>
-                      <div style={{ flex: "1 1 140px" }}>
-                        <TextField
-                          label="Unit price"
-                          value={newUnitPriceInput}
-                          onChange={(val) => {
-                            setNewUnitPriceInput(val);
-                            const p = parseFloat(val);
-                            if (!isNaN(p) && quantity > 0) setNewPriceInput((p * quantity).toFixed(2));
-                            else if (val === "") setNewPriceInput("");
-                          }}
-                          type="number"
-                          prefix="USD"
-                          placeholder={unitPrice.toFixed(2)}
-                        />
-                      </div>
-                      <div style={{ flex: "1 1 140px" }}>
+                      <div style={{ flex: "1 1 0" }}>
                         <TextField
                           label="New item price"
-                          value={!isNaN(parsedItemPrice) ? parsedItemPrice.toFixed(2) : ""}
+                          value={!isNaN(newItemPrice) ? newItemPrice.toFixed(2) : ""}
                           placeholder="0.00"
                           prefix="USD"
                           isReadOnly
                         />
                       </div>
-                      <div style={{ flex: "1 1 140px" }}>
+                      <div style={{ flex: "1 1 0" }}>
                         <TextField
                           label="Discount"
                           value={!isNaN(discountAmt) ? discountAmt.toFixed(2) : ""}
@@ -1332,8 +1379,145 @@ const handleSubmit = useCallback(() => {
                         />
                       </div>
                     </div>
-                    {newPriceInvalid && (
-                      <Callout tone="warning">This price will require approval for amount below {(basePrice * 0.45).toFixed(2)} USD</Callout>
+                    {!isNaN(newItemPrice) && basePrice > 0 && discountAmt > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", borderTop: "1px solid var(--cim-border-subtle, #eaebeb)", paddingTop: "8px" }}>
+                        <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>New item price</span>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                          <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{basePrice.toFixed(2)} USD</span>
+                          <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{newItemPrice.toFixed(2)} USD</span>
+                          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>(Excluding tax)</span>
+                        </div>
+                        <span style={{ fontSize: "0.875rem", fontWeight: 400, color: "var(--cim-fg-success, #007e3f)" }}>
+                          Savings of {discountAmt.toFixed(2)} USD due to unit price change
+                        </span>
+                      </div>
+                    )}
+                    {showWarning && (
+                      <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Unit price discount panel */}
+              {activeOfferType === "unit" && (() => {
+                const newUnitP = newUnitPriceInput !== "" ? parseFloat(newUnitPriceInput) : NaN;
+                const newItemPrice = !isNaN(newUnitP) && quantity > 0 ? parseFloat((newUnitP * quantity).toFixed(2)) : NaN;
+                const discountAmt = !isNaN(newItemPrice) && basePrice > 0 ? parseFloat((basePrice - newItemPrice).toFixed(2)) : NaN;
+                const approvalThreshold = basePrice > 0 ? parseFloat((basePrice * 0.9).toFixed(2)) : 0;
+                const showWarning = !isNaN(newItemPrice) && basePrice > 0 && newItemPrice < approvalThreshold;
+                return (
+                  <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
+                      <div style={{ flex: "1 1 0" }}>
+                        <TextField
+                          label="Unit price"
+                          value={newUnitPriceInput}
+                          onChange={(val) => { setNewUnitPriceInput(val); }}
+                          type="number"
+                          prefix="USD"
+                          placeholder={unitPrice.toFixed(2)}
+                          description={approvalThreshold > 0 ? `Will require approval for amount below ${approvalThreshold.toFixed(2)} USD` : undefined}
+                          onKeyDown={(e) => {
+                            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                            e.preventDefault();
+                            const cur = parseFloat(newUnitPriceInput) || 0;
+                            const next = Math.max(0, parseFloat((cur + (e.key === "ArrowUp" ? 0.01 : -0.01)).toFixed(2)));
+                            setNewUnitPriceInput(next.toFixed(2));
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: "1 1 0" }}>
+                        <TextField
+                          label="New item price"
+                          value={!isNaN(newItemPrice) ? newItemPrice.toFixed(2) : ""}
+                          placeholder="0.00"
+                          prefix="USD"
+                          isReadOnly
+                        />
+                      </div>
+                      <div style={{ flex: "1 1 0" }}>
+                        <TextField
+                          label="Discount"
+                          value={!isNaN(discountAmt) ? discountAmt.toFixed(2) : ""}
+                          placeholder="0.00"
+                          prefix="USD"
+                          isReadOnly
+                        />
+                      </div>
+                    </div>
+                    {!isNaN(newItemPrice) && basePrice > 0 && discountAmt > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", borderTop: "1px solid var(--cim-border-subtle, #eaebeb)", paddingTop: "8px" }}>
+                        <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>New item price</span>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                          <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{basePrice.toFixed(2)} USD</span>
+                          <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{newItemPrice.toFixed(2)} USD</span>
+                          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>(Excluding tax)</span>
+                        </div>
+                        <span style={{ fontSize: "0.875rem", fontWeight: 400, color: "var(--cim-fg-success, #007e3f)" }}>
+                          Savings of {discountAmt.toFixed(2)} USD due to unit price change
+                        </span>
+                      </div>
+                    )}
+                    {showWarning && (
+                      <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Flat price discount panel */}
+              {activeOfferType === "flat" && (() => {
+                const flatPrice = newPriceInput !== "" ? parseFloat(newPriceInput) : NaN;
+                const discountAmt = !isNaN(flatPrice) && basePrice > 0 ? parseFloat((basePrice - flatPrice).toFixed(2)) : NaN;
+                const approvalThreshold = basePrice > 0 ? parseFloat((basePrice * 0.9).toFixed(2)) : 0;
+                const showWarning = !isNaN(flatPrice) && basePrice > 0 && flatPrice < approvalThreshold;
+                return (
+                  <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
+                      <div style={{ flex: "1 1 0" }}>
+                        <TextField
+                          label="Item price"
+                          value={newPriceInput}
+                          onChange={(val) => { setNewPriceInput(val); }}
+                          type="number"
+                          prefix="USD"
+                          placeholder={basePrice.toFixed(2)}
+                          description={approvalThreshold > 0 ? `Will require approval for amount below ${approvalThreshold.toFixed(2)} USD` : undefined}
+                          onKeyDown={(e) => {
+                            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                            e.preventDefault();
+                            const cur = parseFloat(newPriceInput) || 0;
+                            const next = Math.max(0, parseFloat((cur + (e.key === "ArrowUp" ? 0.01 : -0.01)).toFixed(2)));
+                            setNewPriceInput(next.toFixed(2));
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: "1 1 0" }}>
+                        <TextField
+                          label="Discount"
+                          value={!isNaN(discountAmt) ? discountAmt.toFixed(2) : ""}
+                          placeholder="0.00"
+                          prefix="USD"
+                          isReadOnly
+                        />
+                      </div>
+                    </div>
+                    {!isNaN(flatPrice) && !isNaN(discountAmt) && discountAmt > 0 && basePrice > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", borderTop: "1px solid var(--cim-border-subtle, #eaebeb)", paddingTop: "8px" }}>
+                        <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>New item price</span>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                          <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{basePrice.toFixed(2)} USD</span>
+                          <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{flatPrice.toFixed(2)} USD</span>
+                          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>(Excluding tax)</span>
+                        </div>
+                        <span style={{ fontSize: "0.875rem", fontWeight: 400, color: "var(--cim-fg-success, #007e3f)" }}>
+                          Savings of {discountAmt.toFixed(2)} USD due to unit price change
+                        </span>
+                      </div>
+                    )}
+                    {showWarning && (
+                      <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
                     )}
                   </div>
                 );
@@ -1382,18 +1566,22 @@ const handleSubmit = useCallback(() => {
                   <RadioGroup
                     value={accType ?? ""}
                     onChange={(v) => {
-                      const next = v as "pct" | "price";
+                      const next = v as "pct" | "unit" | "flat";
                       setAccOfferTypes((prev) => ({ ...prev, [acc.id]: next }));
-                      if (next === "price" && !accItemPriceInputs[acc.id] && accOriginalTotal > 0) {
-                        setAccItemPriceInputs((prev) => ({ ...prev, [acc.id]: accOriginalTotal.toFixed(2) }));
+                      if (next === "unit" && !accUnitPriceInputs[acc.id] && acc.unitPrice > 0) {
                         setAccUnitPriceInputs((prev) => ({ ...prev, [acc.id]: acc.unitPrice.toFixed(2) }));
+                      }
+                      if (next === "flat" && !accItemPriceInputs[acc.id] && accOriginalTotal > 0) {
+                        setAccItemPriceInputs((prev) => ({ ...prev, [acc.id]: accOriginalTotal.toFixed(2) }));
                       }
                     }}
                     aria-label={`Offer type for ${acc.label}`}
                     direction="horizontal"
+                    UNSAFE_style={{ "--cim-stack-gap-sm": "48px" } as React.CSSProperties}
                   >
                     <Radio value="pct">% Based pricing</Radio>
-                    <Radio value="price">New price</Radio>
+                    <Radio value="unit">Unit price discount</Radio>
+                    <Radio value="flat">Flat price discount</Radio>
                   </RadioGroup>
 
                   {accType === "pct" && (() => {
@@ -1402,8 +1590,8 @@ const handleSubmit = useCallback(() => {
                     const accNewItemPrice = !isNaN(accDisc) ? parseFloat((accOriginalTotal - accDisc).toFixed(2)) : NaN;
                     return (
                       <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
-                          <div style={{ flexShrink: 0 }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
+                          <div style={{ flex: "1 1 0" }}>
                             <TextField
                               label="Discount Percentage"
                               value={accPct}
@@ -1411,27 +1599,32 @@ const handleSubmit = useCallback(() => {
                               type="number"
                               suffix="%"
                               description="Will require approval for more than 10% discount"
+                              onKeyDown={(e) => {
+                                if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                                e.preventDefault();
+                                const cur = parseFloat(accPct) || 0;
+                                const next = Math.max(0, Math.min(100, parseFloat((cur + (e.key === "ArrowUp" ? 0.01 : -0.01)).toFixed(2))));
+                                setAccPctInputs((prev) => ({ ...prev, [acc.id]: next.toFixed(2) }));
+                              }}
                             />
                           </div>
-                          <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
-                            <div style={{ width: "180px" }}>
-                              <TextField
-                                label="New item price"
-                                value={!isNaN(accNewItemPrice) ? accNewItemPrice.toFixed(2) : ""}
-                                placeholder="0.00"
-                                prefix="USD"
-                                isReadOnly
-                              />
-                            </div>
-                            <div style={{ width: "180px" }}>
-                              <TextField
-                                label="Discount"
-                                value={!isNaN(accDisc) ? accDisc.toFixed(2) : ""}
-                                placeholder="0.00"
-                                prefix="USD"
-                                isReadOnly
-                              />
-                            </div>
+                          <div style={{ flex: "1 1 0" }}>
+                            <TextField
+                              label="New item price"
+                              value={!isNaN(accNewItemPrice) ? accNewItemPrice.toFixed(2) : ""}
+                              placeholder="0.00"
+                              prefix="USD"
+                              isReadOnly
+                            />
+                          </div>
+                          <div style={{ flex: "1 1 0" }}>
+                            <TextField
+                              label="Discount"
+                              value={!isNaN(accDisc) ? accDisc.toFixed(2) : ""}
+                              placeholder="0.00"
+                              prefix="USD"
+                              isReadOnly
+                            />
                           </div>
                         </div>
                         {pct > 10 && (
@@ -1441,63 +1634,96 @@ const handleSubmit = useCallback(() => {
                     );
                   })()}
 
-                  {accType === "price" && (() => {
-                    const accInvalid = !isNaN(parsedAccItemPrice) && accOriginalTotal > 0 && parsedAccItemPrice < accOriginalTotal * 0.45;
+                  {accType === "unit" && (() => {
+                    const newAccUnitP = accUnitPrice !== "" ? parseFloat(accUnitPrice) : NaN;
+                    const accNewItemPrice = !isNaN(newAccUnitP) && acc.quantity > 0 ? parseFloat((newAccUnitP * acc.quantity).toFixed(2)) : NaN;
+                    const accDisc = !isNaN(accNewItemPrice) ? parseFloat((accOriginalTotal - accNewItemPrice).toFixed(2)) : NaN;
+                    const accThreshold = parseFloat((accOriginalTotal * 0.9).toFixed(2));
+                    const showWarning = !isNaN(accNewItemPrice) && accNewItemPrice < accThreshold;
                     return (
                       <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
-                          <div style={{ flex: "1 1 180px" }}>
-                            <TextField
-                              label="Item price"
-                              value={accItemPrice}
-                              onChange={(val) => {
-                                setAccItemPriceInputs((prev) => ({ ...prev, [acc.id]: val }));
-                                const p = parseFloat(val);
-                                if (!isNaN(p) && acc.quantity > 0) setAccUnitPriceInputs((prev) => ({ ...prev, [acc.id]: (p / acc.quantity).toFixed(2) }));
-                                else if (val === "") setAccUnitPriceInputs((prev) => ({ ...prev, [acc.id]: "" }));
-                              }}
-                              type="number"
-                              prefix="USD"
-                              placeholder={accOriginalTotal.toFixed(2)}
-                            />
-                          </div>
-                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", paddingTop: "32px", flexShrink: 0 }}>=</span>
-                          <div style={{ flex: "1 1 140px" }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
+                          <div style={{ flex: "1 1 0" }}>
                             <TextField
                               label="Unit price"
                               value={accUnitPrice}
-                              onChange={(val) => {
-                                setAccUnitPriceInputs((prev) => ({ ...prev, [acc.id]: val }));
-                                const p = parseFloat(val);
-                                if (!isNaN(p) && acc.quantity > 0) setAccItemPriceInputs((prev) => ({ ...prev, [acc.id]: (p * acc.quantity).toFixed(2) }));
-                                else if (val === "") setAccItemPriceInputs((prev) => ({ ...prev, [acc.id]: "" }));
-                              }}
+                              onChange={(val) => setAccUnitPriceInputs((prev) => ({ ...prev, [acc.id]: val }))}
                               type="number"
                               prefix="USD"
                               placeholder={acc.unitPrice.toFixed(2)}
+                              description={`Will require approval for amount below ${accThreshold.toFixed(2)} USD`}
+                              onKeyDown={(e) => {
+                                if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                                e.preventDefault();
+                                const cur = parseFloat(accUnitPrice) || 0;
+                                const next = Math.max(0, parseFloat((cur + (e.key === "ArrowUp" ? 0.01 : -0.01)).toFixed(2)));
+                                setAccUnitPriceInputs((prev) => ({ ...prev, [acc.id]: next.toFixed(2) }));
+                              }}
                             />
                           </div>
-                          <div style={{ flex: "1 1 140px" }}>
+                          <div style={{ flex: "1 1 0" }}>
                             <TextField
                               label="New item price"
-                              value={!isNaN(parsedAccItemPrice) ? parsedAccItemPrice.toFixed(2) : ""}
+                              value={!isNaN(accNewItemPrice) ? accNewItemPrice.toFixed(2) : ""}
                               placeholder="0.00"
                               prefix="USD"
                               isReadOnly
                             />
                           </div>
-                          <div style={{ flex: "1 1 140px" }}>
+                          <div style={{ flex: "1 1 0" }}>
                             <TextField
                               label="Discount"
-                              value={!isNaN(accDiscountAmt) ? accDiscountAmt.toFixed(2) : ""}
+                              value={!isNaN(accDisc) ? accDisc.toFixed(2) : ""}
                               placeholder="0.00"
                               prefix="USD"
                               isReadOnly
                             />
                           </div>
                         </div>
-                        {accInvalid && (
-                          <Callout tone="warning">This price will require approval for amount below {(accOriginalTotal * 0.45).toFixed(2)} USD</Callout>
+                        {showWarning && (
+                          <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {accType === "flat" && (() => {
+                    const accDisc = !isNaN(parsedAccItemPrice) && accOriginalTotal > 0 ? parseFloat((accOriginalTotal - parsedAccItemPrice).toFixed(2)) : NaN;
+                    const accThreshold = parseFloat((accOriginalTotal * 0.9).toFixed(2));
+                    const showWarning = !isNaN(parsedAccItemPrice) && parsedAccItemPrice < accThreshold;
+                    return (
+                      <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
+                          <div style={{ flex: "1 1 0" }}>
+                            <TextField
+                              label="Item price"
+                              value={accItemPrice}
+                              onChange={(val) => setAccItemPriceInputs((prev) => ({ ...prev, [acc.id]: val }))}
+                              type="number"
+                              prefix="USD"
+                              placeholder={accOriginalTotal.toFixed(2)}
+                              description={`Will require approval for amount below ${accThreshold.toFixed(2)} USD`}
+                              onKeyDown={(e) => {
+                                if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                                e.preventDefault();
+                                const cur = parseFloat(accItemPrice) || 0;
+                                const next = Math.max(0, parseFloat((cur + (e.key === "ArrowUp" ? 0.01 : -0.01)).toFixed(2)));
+                                setAccItemPriceInputs((prev) => ({ ...prev, [acc.id]: next.toFixed(2) }));
+                              }}
+                            />
+                          </div>
+                          <div style={{ flex: "1 1 0" }}>
+                            <TextField
+                              label="Discount"
+                              value={!isNaN(accDisc) ? accDisc.toFixed(2) : ""}
+                              placeholder="0.00"
+                              prefix="USD"
+                              isReadOnly
+                            />
+                          </div>
+                        </div>
+                        {showWarning && (
+                          <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
                         )}
                       </div>
                     );
@@ -1511,7 +1737,10 @@ const handleSubmit = useCallback(() => {
               let mainItemDiscount = 0;
               if (activeOfferType === "pct" && parseFloat(pctBasedInput) > 0 && basePrice > 0) {
                 mainItemDiscount = parseFloat((basePrice * parseFloat(pctBasedInput) / 100).toFixed(2));
-              } else if (activeOfferType === "price" && newPriceInput !== "" && basePrice > 0) {
+              } else if (activeOfferType === "unit" && newUnitPriceInput !== "" && quantity > 0 && basePrice > 0) {
+                const up = parseFloat(newUnitPriceInput);
+                if (!isNaN(up)) mainItemDiscount = parseFloat((basePrice - up * quantity).toFixed(2));
+              } else if (activeOfferType === "flat" && newPriceInput !== "" && basePrice > 0) {
                 const p = parseFloat(newPriceInput);
                 if (!isNaN(p) && p >= 0) mainItemDiscount = parseFloat((basePrice - p).toFixed(2));
               }
@@ -1523,7 +1752,10 @@ const handleSubmit = useCallback(() => {
                 if (aType === "pct") {
                   const pct = parseFloat(accPctInputs[acc.id] ?? "");
                   if (pct > 0) totalAccDiscount += parseFloat((aOrigTotal * pct / 100).toFixed(2));
-                } else if (aType === "price") {
+                } else if (aType === "unit") {
+                  const up = parseFloat(accUnitPriceInputs[acc.id] ?? "");
+                  if (!isNaN(up) && acc.quantity > 0) totalAccDiscount += parseFloat((aOrigTotal - up * acc.quantity).toFixed(2));
+                } else if (aType === "flat") {
                   const ip = parseFloat(accItemPriceInputs[acc.id] ?? "");
                   if (!isNaN(ip) && ip >= 0) totalAccDiscount += parseFloat((aOrigTotal - ip).toFixed(2));
                 }
@@ -2198,12 +2430,14 @@ const handleSubmit = useCallback(() => {
         {isArtworkModalOpen && (
           <PreviousArtworkModal
             onConfirm={(artwork) => {
-              setArtworkFileName(artwork.fileName);
+              setArtworkFileName(artwork.name);
+              setArtworkThumbnailUrl(artwork.thumbnailUrl);
               setIsArtworkModalOpen(false);
             }}
             onCancel={() => {
               setArtworkOption(null);
               setArtworkFileName("");
+              setArtworkThumbnailUrl("");
               setIsArtworkModalOpen(false);
             }}
           />
