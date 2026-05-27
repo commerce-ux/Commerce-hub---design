@@ -70,10 +70,9 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(!isStoreLocked);
   const [selectedStore, setSelectedStore] = useState<string>(storeFromAddress);
 
-  // Order-level discount + override
+  // Order-level discount
   const [orderDiscount, setOrderDiscount] = useState(0);
   const [discountCode, setDiscountCode] = useState("");
-  const [overridePrice, setOverridePrice] = useState<number | null>(null);
   const [shippingEstimate, setShippingEstimate] = useState(0);
 
   const { subtotal, taxEstimate, total } = computeTotals(items);
@@ -89,8 +88,7 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
     taxEstimate,
     orderDiscount,
     discountCode,
-    overridePrice,
-    total: overridePrice !== null ? overridePrice : parseFloat((total + shippingEstimate).toFixed(2)),
+    total: parseFloat((total + shippingEstimate).toFixed(2)),
   };
 
   function handleAddToOrder(item: DraftOrderItem) {
@@ -171,10 +169,6 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
   function handleDiscountApplied(code: string, percent: number) {
     setDiscountCode(code);
     setOrderDiscount(percent);
-  }
-
-  function handleOverridePriceChange(price: number | null) {
-    setOverridePrice(price);
   }
 
   function handleAddNewItem() {
@@ -285,7 +279,6 @@ export function CreateOrderPage({ customer }: CreateOrderPageProps) {
             <OrderSummaryPanel
               draftOrder={draftOrder}
               onDiscountApplied={handleDiscountApplied}
-              onOverridePriceChange={handleOverridePriceChange}
               onPlaceOrder={() => setIsCheckoutOpen(true)}
             />
           </div>

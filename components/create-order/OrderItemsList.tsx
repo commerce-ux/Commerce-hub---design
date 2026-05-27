@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import {
-  Checkbox, Button, Disclosure, AlertDialog, AlertDialogBody, AlertDialogActions,
+  Button, Callout, Disclosure, AlertDialog, AlertDialogBody, AlertDialogActions,
   TextField, ModalDialog, ModalDialogBody,
 } from "@cimpress-ui/react";
 import {
@@ -39,54 +39,14 @@ const iconBtnStyle: React.CSSProperties = {
 };
 
 export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantityChange, onSizeQuantityChange, onAccessoryRemove }: OrderItemsListProps) {
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [removingSize, setRemovingSize] = useState<{ draftItemId: string; size: string; isLastSize: boolean } | null>(null);
   const [removingAccessory, setRemovingAccessory] = useState<{ itemId: string; accessoryId: string } | null>(null);
-  const [sizePopoverOpenId, setSizePopoverOpenId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ url: string; alt: string } | null>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-
-  // Close size popover on outside click
-  useEffect(() => {
-    if (!sizePopoverOpenId) return;
-    function handleOutsideClick(e: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setSizePopoverOpenId(null);
-      }
-    }
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, [sizePopoverOpenId]);
 
   if (items.length === 0) return null;
 
   const removingItem = removingItemId ? items.find((i) => i.draftItemId === removingItemId) : null;
-
-  const allSelected = selectedIds.size === items.length && items.length > 0;
-  const someSelected = selectedIds.size > 0 && !allSelected;
-
-  function toggleAll() {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(items.map((i) => i.draftItemId)));
-    }
-  }
-
-  function toggleItem(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function removeSelected() {
-    selectedIds.forEach((id) => onRemove(id));
-    setSelectedIds(new Set());
-  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
@@ -129,10 +89,7 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
             variant="primary"
             tone="critical"
             onPress={() => {
-              if (removingItemId) {
-                onRemove(removingItemId);
-                setSelectedIds((prev) => { const n = new Set(prev); n.delete(removingItemId); return n; });
-              }
+              if (removingItemId) onRemove(removingItemId);
               setRemovingItemId(null);
             }}
           >
@@ -161,7 +118,6 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
               if (removingSize) {
                 if (removingSize.isLastSize) {
                   onRemove(removingSize.draftItemId);
-                  setSelectedIds((prev) => { const n = new Set(prev); n.delete(removingSize.draftItemId); return n; });
                 } else {
                   onSizeQuantityChange?.(removingSize.draftItemId, removingSize.size, 0);
                 }
@@ -200,34 +156,6 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
         </AlertDialogActions>
       </AlertDialog>
 
-      {/* Selection bar */}
-      <div style={{
-        background: "var(--cim-bg-subtle, #f8f9fa)",
-        borderRadius: "6px",
-        padding: "0 16px",
-        height: "48px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: "12px",
-      }}>
-        <Checkbox
-          isSelected={allSelected}
-          isIndeterminate={someSelected}
-          onChange={toggleAll}
-        >
-          {selectedIds.size} out of {items.length} item{items.length !== 1 ? "s" : ""} selected
-        </Checkbox>
-        <Button
-          variant="tertiary"
-          tone="critical"
-          size="small"
-          isDisabled={selectedIds.size === 0}
-          onPress={removeSelected}
-        >
-          Remove items
-        </Button>
-      </div>
 
       {/* Item cards */}
       {(() => {
@@ -275,10 +203,6 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                       background: "var(--cim-bg-subtle, #f8f9fa)",
                       borderBottom: "1px solid var(--cim-border-base, #dadcdd)",
                     }}>
-                      <Checkbox
-                        isSelected={selectedIds.has(item.draftItemId)}
-                        onChange={() => toggleItem(item.draftItemId)}
-                      />
                       <span style={{ flex: 1, fontSize: "0.9375rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         G{gNum}({activeSizes.length} item{activeSizes.length !== 1 ? "s" : ""}) - {item.product.name}
                       </span>
@@ -469,8 +393,29 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                 })
                 .filter(Boolean) as string[];
 
+              // Upsell: find the next pricing tier above current qty
+              const sortedTiers = [...item.product.pricingTiers].sort((a, b) => a.minQty - b.minQty);
+              const nextTier = sortedTiers.find((t) => t.minQty > item.quantity);
+              const upsellQty = nextTier ? nextTier.minQty - item.quantity : 0;
+              const upsellCost = nextTier ? parseFloat((upsellQty * nextTier.unitPrice).toFixed(2)) : 0;
+              const hasImprint = item.artworkType !== "none";
+
               return (
-                <div key={item.draftItemId} style={{
+                <React.Fragment key={item.draftItemId}>
+                  {/* Approval callout — above card */}
+                  {item.itemDiscount > 10 && (
+                    <Callout tone="warning">
+                      This price will require approval as it exceeds 10% discount threshold
+                    </Callout>
+                  )}
+                  {/* Imprint missing callout — above card */}
+                  {!hasImprint && (
+                    <Callout tone="info">
+                      Imprint details have not been confirmed yet. Use the &quot;Add imprint&quot; under the image to add imprint to the item
+                    </Callout>
+                  )}
+
+                <div style={{
                   background: "white",
                   border: "1px solid var(--cim-border-base, #dadcdd)",
                   borderRadius: "6px",
@@ -478,17 +423,11 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                 }}>
                   {/* Card body */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
-                    {/* Header: checkbox + name + action buttons */}
+                    {/* Header: name + action buttons */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
-                        <Checkbox
-                          isSelected={selectedIds.has(item.draftItemId)}
-                          onChange={() => toggleItem(item.draftItemId)}
-                        />
-                        <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", whiteSpace: "nowrap" }}>
-                          {item.product.name}
-                        </span>
-                      </div>
+                      <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", whiteSpace: "nowrap" }}>
+                        {item.product.name}
+                      </span>
                       <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
                         <button style={iconBtnStyle} title="More options" aria-label="More options" onClick={() => {}}>
                           <IconMenuMoreVertical />
@@ -533,12 +472,12 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                           )}
                         </div>
                         <a
-                          href="https://pens.experience.cimpress.io/us/studio/?key=PRD-ZQO1BK4YA&productVersion=4&locale=en-us&selectedOptions=%7B%22Substrate%20Color%22%3A%22%23000000%22%7D&fullBleedElected=true&mpvId=portAuthorityWomensBrickJacketClone&qty=%7b%22S%22%3a0%2c%22M%22%3a0%2c%223XL%22%3a0%2c%22XS%22%3a5%7d"
+                          href="https://pens.experience.cimpress.io/us/studio/?key=PRD-ZQO1BK4YA&productVersion=4&locale=en-us"
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ fontSize: "1rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline" }}
                         >
-                          Edit design
+                          {hasImprint ? "Edit imprint" : "Add imprint"}
                         </a>
                       </div>
 
@@ -577,31 +516,39 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                           </div>
 
                           {/* Item total */}
-                          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "12px", minWidth: "160px" }}>
+                          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", minWidth: "160px" }}>
                             <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>Item total</span>
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", width: "100%" }}>
-                              <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Tax {taxAmount.toFixed(2)} USD</span>
-                              <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-                                {hasDiscount && (
-                                  <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>
-                                    {originalTotalWithTax.toFixed(2)} USD
-                                  </span>
-                                )}
-                                <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
-                                  {discountedTotalWithTax.toFixed(2)} USD
-                                </span>
-                              </div>
-                              <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                                USD {item.unitPrice.toFixed(2)} / unit
-                              </span>
+                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Tax {taxAmount.toFixed(2)} USD</span>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
                               {hasDiscount && (
-                                <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-success, #007e3f)" }}>
-                                  {parseFloat((originalTotalWithTax - discountedTotalWithTax).toFixed(2)).toFixed(2)} USD saving due to {item.itemDiscount}% discount
+                                <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>
+                                  {originalTotalWithTax.toFixed(2)} USD
                                 </span>
                               )}
+                              <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
+                                {discountedTotalWithTax.toFixed(2)} USD
+                              </span>
+                              <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>(Inc tax)</span>
                             </div>
+                            {hasDiscount && (
+                              <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-success, #007e3f)" }}>
+                                Total discount of {parseFloat((originalTotalWithTax - discountedTotalWithTax).toFixed(2)).toFixed(2)} USD
+                              </span>
+                            )}
                           </div>
                         </div>
+
+                        {/* Add upsell */}
+                        {nextTier && (
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <Button size="small" variant="secondary" onPress={() => onQuantityChange?.(item.draftItemId, nextTier.minQty)}>
+                              Add upsell
+                            </Button>
+                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                              {upsellQty} more for {upsellCost.toFixed(2)} USD
+                            </span>
+                          </div>
+                        )}
 
                         {/* Selected options disclosure */}
                         <Disclosure title="Selected options and details" variant="subtle">
@@ -621,6 +568,15 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                                 Artwork: {item.artworkFileName}
                               </span>
                             )}
+                          </div>
+                        </Disclosure>
+
+                        {/* Internal notes disclosure — always shown, disabled when no notes */}
+                        <Disclosure title="Internal notes" variant="subtle" isDisabled={!item.internalNotes}>
+                          <div style={{ padding: "4px 0 8px" }}>
+                            <pre style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "20px", margin: 0, whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+                              {item.internalNotes ?? ""}
+                            </pre>
                           </div>
                         </Disclosure>
                       </div>
@@ -654,6 +610,7 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                     </div>
                   )}
                 </div>
+                </React.Fragment>
               );
             })}
           </div>

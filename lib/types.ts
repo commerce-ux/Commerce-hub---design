@@ -154,6 +154,7 @@ export interface DraftOrderItem {
   unitPrice: number; // resolved from pricing tier
   lineTotal: number; // (unitPrice * qty) * (1 - itemDiscount/100)
   accessories?: DraftOrderItemAccessory[];
+  internalNotes?: string;
 }
 
 export interface DraftOrder {
@@ -167,7 +168,7 @@ export interface DraftOrder {
   taxEstimate: number;
   orderDiscount: number; // percentage 0–100
   discountCode: string;
-  overridePrice: number | null; // null = not overriding
+  overridePrice?: number | null; // null = not overriding
   total: number;
 }
 
