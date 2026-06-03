@@ -4,7 +4,10 @@ import React, { useState } from "react";
 import {
   Button, Callout, Disclosure, AlertDialog, AlertDialogBody, AlertDialogActions,
   TextField, ModalDialog, ModalDialogBody,
+  MenuRoot, Menu, MenuItem, IconButton,
 } from "@cimpress-ui/react";
+import { AddAccessoryModal } from "./AddAccessoryModal";
+import { PriceOverrideModal } from "./PriceOverrideModal";
 import {
   IconTrash,
   IconPencil,
@@ -14,6 +17,8 @@ import {
 import type { DraftOrderItem } from "@/lib/types";
 import { Toast } from "@/components/Toast";
 
+import type { DraftOrderItemAccessory } from "@/lib/types";
+
 interface OrderItemsListProps {
   items: DraftOrderItem[];
   onEdit: (draftItemId: string) => void;
@@ -22,6 +27,9 @@ interface OrderItemsListProps {
   onQuantityChange?: (draftItemId: string, newQty: number) => void;
   onSizeQuantityChange?: (draftItemId: string, size: string, newQty: number) => void;
   onAccessoryRemove?: (draftItemId: string, accessoryId: string) => void;
+  onAddAccessory?: (draftItemId: string, acc: DraftOrderItemAccessory) => void;
+  onEditPriceOverride?: (draftItemId: string) => void;
+  onItemLineTotalUpdate?: (draftItemId: string, newLineTotal: number) => void;
 }
 
 const iconBtnStyle: React.CSSProperties = {
@@ -38,18 +46,52 @@ const iconBtnStyle: React.CSSProperties = {
   fontSize: "20px",
 };
 
-export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantityChange, onSizeQuantityChange, onAccessoryRemove }: OrderItemsListProps) {
+export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantityChange, onSizeQuantityChange, onAccessoryRemove, onAddAccessory, onEditPriceOverride, onItemLineTotalUpdate }: OrderItemsListProps) {
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [removingSize, setRemovingSize] = useState<{ draftItemId: string; size: string; isLastSize: boolean } | null>(null);
   const [removingAccessory, setRemovingAccessory] = useState<{ itemId: string; accessoryId: string } | null>(null);
   const [previewImage, setPreviewImage] = useState<{ url: string; alt: string } | null>(null);
+  const [addingAccessoryForItemId, setAddingAccessoryForItemId] = useState<string | null>(null);
+  const [priceOverrideItemId, setPriceOverrideItemId] = useState<string | null>(null);
 
   if (items.length === 0) return null;
 
   const removingItem = removingItemId ? items.find((i) => i.draftItemId === removingItemId) : null;
 
+  const addingAccessoryItem = addingAccessoryForItemId ? items.find((i) => i.draftItemId === addingAccessoryForItemId) : null;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+      {/* Price override modal — triggered from More options menu */}
+      {priceOverrideItemId && (() => {
+        const priceOverrideItem = items.find((i) => i.draftItemId === priceOverrideItemId);
+        if (!priceOverrideItem) return null;
+        return (
+          <PriceOverrideModal
+            item={priceOverrideItem}
+            onConfirm={(newLineTotal) => {
+              onItemLineTotalUpdate?.(priceOverrideItemId, newLineTotal);
+              setPriceOverrideItemId(null);
+            }}
+            onCancel={() => setPriceOverrideItemId(null)}
+          />
+        );
+      })()}
+
+      {/* Add accessory modal — triggered from More options menu */}
+      {addingAccessoryForItemId && addingAccessoryItem && (
+        <AddAccessoryModal
+          existingAccessories={addingAccessoryItem.accessories ?? []}
+          mainItemQty={addingAccessoryItem.quantity}
+          onAdd={(acc) => {
+            onAddAccessory?.(addingAccessoryForItemId, acc);
+          }}
+          onRemove={(accId) => {
+            onAccessoryRemove?.(addingAccessoryForItemId, accId);
+          }}
+          onCancel={() => setAddingAccessoryForItemId(null)}
+        />
+      )}
       {/* Image preview modal */}
       {previewImage && (
         <ModalDialog
@@ -242,9 +284,18 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                                     {item.product.name} - {size}
                                   </span>
                                   <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
-                                    <button style={iconBtnStyle} title="More options" aria-label="More options" onClick={() => {}}>
-                                      <IconMenuMoreVertical />
-                                    </button>
+                                    <MenuRoot>
+                                      <IconButton aria-label="More options" icon={<IconMenuMoreVertical />} variant="tertiary" size="medium" />
+                                      <Menu align="end" onAction={(key) => {
+                                        if (key === "add-accessory") setAddingAccessoryForItemId(item.draftItemId);
+                                        if (key === "edit-price-override") setPriceOverrideItemId(item.draftItemId);
+                                        if (key === "duplicate") onDuplicate(item.draftItemId);
+                                      }}>
+                                        <MenuItem id="add-accessory">Add accessory</MenuItem>
+                                        <MenuItem id="edit-price-override">Edit price override</MenuItem>
+                                        <MenuItem id="duplicate">Duplicate item</MenuItem>
+                                      </Menu>
+                                    </MenuRoot>
                                     <button style={iconBtnStyle} title="Edit" aria-label="Edit item" onClick={() => onEdit(item.draftItemId)}>
                                       <IconPencil />
                                     </button>
@@ -429,9 +480,18 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                         {item.product.name}
                       </span>
                       <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
-                        <button style={iconBtnStyle} title="More options" aria-label="More options" onClick={() => {}}>
-                          <IconMenuMoreVertical />
-                        </button>
+                        <MenuRoot>
+                          <IconButton aria-label="More options" icon={<IconMenuMoreVertical />} variant="tertiary" size="medium" />
+                          <Menu align="end" onAction={(key) => {
+                            if (key === "add-accessory") setAddingAccessoryForItemId(item.draftItemId);
+                            if (key === "edit-price-override") setPriceOverrideItemId(item.draftItemId);
+                            if (key === "duplicate") onDuplicate(item.draftItemId);
+                          }}>
+                            <MenuItem id="add-accessory">Add accessory</MenuItem>
+                            <MenuItem id="edit-price-override">Edit price override</MenuItem>
+                            <MenuItem id="duplicate">Duplicate item</MenuItem>
+                          </Menu>
+                        </MenuRoot>
                         <button style={iconBtnStyle} title="Edit" aria-label="Edit item" onClick={() => onEdit(item.draftItemId)}>
                           <IconPencil />
                         </button>
@@ -583,30 +643,49 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                     </div>
                   </div>
 
-                  {/* Accessories rows */}
+                  {/* Accessories — full card layout matching Figma */}
                   {item.accessories && item.accessories.length > 0 && (
-                    <div style={{ borderTop: "1px solid var(--cim-border-subtle, #eaebeb)" }}>
-                      {item.accessories.map((acc) => (
-                        <div
-                          key={acc.id}
-                          style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "10px 16px", gap: "12px",
-                          }}
-                        >
-                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                            {acc.quantity} {acc.label} added as an accessory (USD {(acc.quantity * acc.unitPrice).toFixed(2)})
-                          </span>
-                          <button
-                            style={{ ...iconBtnStyle, flexShrink: 0 }}
-                            title="Remove accessory"
-                            aria-label={`Remove ${acc.label} accessory`}
-                            onClick={() => setRemovingAccessory({ itemId: item.draftItemId, accessoryId: acc.id })}
-                          >
-                            <IconTrash />
-                          </button>
-                        </div>
-                      ))}
+                    <div>
+                      {item.accessories.map((acc) => {
+                        const accTotal = parseFloat((acc.quantity * acc.unitPrice).toFixed(2));
+                        return (
+                          <div key={acc.id} style={{ borderTop: "1px solid var(--cim-border-subtle, #eaebeb)", padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                            {/* Header: name + unit price | trash */}
+                            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>{acc.label}</span>
+                                <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", lineHeight: "20px" }}>{acc.unitPrice.toFixed(2)} USD / unit</span>
+                              </div>
+                              <button
+                                style={{ ...iconBtnStyle, flexShrink: 0 }}
+                                title="Remove accessory"
+                                aria-label={`Remove ${acc.label} accessory`}
+                                onClick={() => setRemovingAccessory({ itemId: item.draftItemId, accessoryId: acc.id })}
+                              >
+                                <IconTrash />
+                              </button>
+                            </div>
+                            {/* Body: quantity | item total */}
+                            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "255px", flexShrink: 0 }}>
+                                <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Enter custom quantity</span>
+                                <div style={{ background: "white", border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "4px", height: "40px", display: "flex", alignItems: "center", padding: "0 12px", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
+                                  {acc.quantity}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+                                <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-muted, #94979b)" }}>Item total</span>
+                                <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                                  <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>
+                                    {accTotal.toFixed(2)} USD
+                                  </span>
+                                  <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>(Exc tax)</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

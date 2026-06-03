@@ -1,59 +1,41 @@
 "use client";
 
 import { useState } from "react";
-import { Button, ModalDialog, ModalDialogBody, ModalDialogActions } from "@cimpress-ui/react";
+import { Button, Drawer, DrawerBody, DrawerActions } from "@cimpress-ui/react";
 
 export interface PreviousArtwork {
   id: string;
-  orderId: string;
-  uploadDate: string;
+  name: string;       // e.g. "Artwork 1"
+  orderId: string;    // e.g. "1230123123"
+  uploadDate: string; // e.g. "23 March 2026"
   thumbnailUrl: string;
-  fileName: string;
+}
+
+/** Generates an inline SVG data URI — no network, always renders */
+function logo(bg: string, text: string, textColor = "white"): string {
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="240" viewBox="0 0 300 240">`,
+    `<rect width="300" height="240" fill="${bg}"/>`,
+    `<text x="150" y="120" font-size="72" font-family="Arial,Helvetica,sans-serif" font-weight="bold"`,
+    ` text-anchor="middle" dominant-baseline="middle" fill="${textColor}">${text}</text>`,
+    `</svg>`,
+  ].join("");
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 export const MOCK_PREVIOUS_ARTWORKS: PreviousArtwork[] = [
-  {
-    id: "art-1",
-    orderId: "VP_LPHSW5Q",
-    uploadDate: "12 Jan 2025",
-    thumbnailUrl: "https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=100&h=100&fit=crop",
-    fileName: "logo_design_v3.pdf",
-  },
-  {
-    id: "art-2",
-    orderId: "VP_KJH23NM",
-    uploadDate: "3 Nov 2024",
-    thumbnailUrl: "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=100&h=100&fit=crop",
-    fileName: "business_card_artwork.ai",
-  },
-  {
-    id: "art-3",
-    orderId: "VP_QAZ11WS",
-    uploadDate: "28 Sep 2024",
-    thumbnailUrl: "https://images.unsplash.com/photo-1569017388730-020b5f80a004?w=100&h=100&fit=crop",
-    fileName: "promo_flyer_final.pdf",
-  },
-  {
-    id: "art-4",
-    orderId: "VP_8WZ3DJ32",
-    uploadDate: "5 Aug 2024",
-    thumbnailUrl: "https://images.unsplash.com/photo-1612838320302-4b3b3996765b?w=100&h=100&fit=crop",
-    fileName: "banner_artwork.eps",
-  },
-  {
-    id: "art-5",
-    orderId: "VP_QRX89PT",
-    uploadDate: "19 Jun 2024",
-    thumbnailUrl: "https://images.unsplash.com/photo-1574181612567-7e21f4cf2d6c?w=100&h=100&fit=crop",
-    fileName: "label_sticker_v2.eps",
-  },
-  {
-    id: "art-6",
-    orderId: "VP_MNL45KJ",
-    uploadDate: "2 Apr 2024",
-    thumbnailUrl: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=100&h=100&fit=crop",
-    fileName: "tshirt_print_artwork.png",
-  },
+  { id: "art-1",  name: "Artwork 1",  orderId: "1230000001", uploadDate: "1 March 2026",   thumbnailUrl: logo("#555555", "🍎") },
+  { id: "art-2",  name: "Artwork 2",  orderId: "1230000002", uploadDate: "8 March 2026",   thumbnailUrl: logo("#4285F4", "G") },
+  { id: "art-3",  name: "Artwork 3",  orderId: "1230000003", uploadDate: "15 March 2026",  thumbnailUrl: logo("#00A4EF", "M") },
+  { id: "art-4",  name: "Artwork 4",  orderId: "1230123123", uploadDate: "23 March 2026",  thumbnailUrl: logo("#FF9900", "a") },
+  { id: "art-5",  name: "Artwork 5",  orderId: "1230456789", uploadDate: "5 April 2026",   thumbnailUrl: logo("#111111", "N") },
+  { id: "art-6",  name: "Artwork 6",  orderId: "1230567890", uploadDate: "12 April 2026",  thumbnailUrl: logo("#00704A", "S") },
+  { id: "art-7",  name: "Artwork 7",  orderId: "1230678901", uploadDate: "19 April 2026",  thumbnailUrl: logo("#E50914", "N") },
+  { id: "art-8",  name: "Artwork 8",  orderId: "1230789012", uploadDate: "26 April 2026",  thumbnailUrl: logo("#1DB954", "S") },
+  { id: "art-9",  name: "Artwork 9",  orderId: "1230890123", uploadDate: "3 May 2026",     thumbnailUrl: logo("#CC0000", "T") },
+  { id: "art-10", name: "Artwork 10", orderId: "1230901234", uploadDate: "10 May 2026",    thumbnailUrl: logo("#FF5A5F", "A") },
+  { id: "art-11", name: "Artwork 11", orderId: "1231012345", uploadDate: "17 May 2026",    thumbnailUrl: logo("#4A154B", "S") },
+  { id: "art-12", name: "Artwork 12", orderId: "1231123456", uploadDate: "24 May 2026",    thumbnailUrl: logo("#0057FF", "P") },
 ];
 
 interface PreviousArtworkModalProps {
@@ -62,121 +44,135 @@ interface PreviousArtworkModalProps {
 }
 
 export function PreviousArtworkModal({ onConfirm, onCancel }: PreviousArtworkModalProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Default to first artwork selected, matching the Figma footer "Selected: Artwork 1"
+  const [selectedId, setSelectedId] = useState<string>(MOCK_PREVIOUS_ARTWORKS[0].id);
 
-  const selected = MOCK_PREVIOUS_ARTWORKS.find((a) => a.id === selectedId) ?? null;
+  const selected = MOCK_PREVIOUS_ARTWORKS.find((a) => a.id === selectedId) ?? MOCK_PREVIOUS_ARTWORKS[0];
 
   return (
-    <ModalDialog
+    <Drawer
       title="Select previous artwork"
       size="medium"
       isOpen
       onOpenChange={(open) => { if (!open) onCancel(); }}
-      isDismissible
     >
-      <ModalDialogBody>
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-            Select one artwork from a previous order to use for this item.
-          </p>
-
-          {/* Thumbnail grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "16px" }}>
-            {MOCK_PREVIOUS_ARTWORKS.map((artwork) => {
-              const isSelected = artwork.id === selectedId;
-              return (
-                <button
-                  key={artwork.id}
-                  onClick={() => setSelectedId(artwork.id)}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "8px",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "8px",
-                    borderRadius: "8px",
-                    outline: "none",
-                    transition: "background 0.1s",
-                    background: isSelected ? "var(--cim-bg-info-subtle, #e8f4f8)" : "transparent",
-                  } as React.CSSProperties}
-                >
-                  {/* Thumbnail */}
+      <DrawerBody>
+        {/* 4-column artwork grid */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: "24px",
+        }}>
+          {MOCK_PREVIOUS_ARTWORKS.map((art) => {
+            const isSelected = art.id === selectedId;
+            return (
+              <button
+                key={art.id}
+                onClick={() => setSelectedId(art.id)}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0",
+                  border: "none",
+                  background: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                {/* Image area with radio button */}
+                <div style={{
+                  position: "relative",
+                  width: "100%",
+                  aspectRatio: "134 / 119",
+                  borderRadius: "6px",
+                  overflow: "hidden",
+                  border: isSelected
+                    ? "2px solid var(--cim-fg-accent, #0091b8)"
+                    : "1.5px solid var(--cim-border-base, #dadcdd)",
+                  marginBottom: "8px",
+                }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={art.thumbnailUrl}
+                    alt={art.name}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                  {/* Radio button — top-left corner of image */}
                   <div style={{
-                    width: "100px",
-                    height: "100px",
-                    borderRadius: "6px",
-                    overflow: "hidden",
-                    border: isSelected
-                      ? "2.5px solid var(--cim-fg-accent, #007798)"
-                      : "2px solid var(--cim-border-base, #dadcdd)",
+                    position: "absolute",
+                    top: "8px",
+                    left: "8px",
+                    width: "16px",
+                    height: "16px",
+                    borderRadius: "50%",
+                    background: isSelected ? "var(--cim-fg-accent, #0091b8)" : "white",
+                    border: isSelected ? "none" : "1.5px solid var(--cim-border-base, #dadcdd)",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     flexShrink: 0,
-                    position: "relative",
                   }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={artwork.thumbnailUrl}
-                      alt={artwork.fileName}
-                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                    />
                     {isSelected && (
-                      <div style={{
-                        position: "absolute", top: "4px", right: "4px",
-                        width: "20px", height: "20px", borderRadius: "50%",
-                        background: "var(--cim-fg-accent, #007798)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                          <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "white" }} />
                     )}
                   </div>
+                </div>
 
-                  {/* Metadata */}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", width: "100%" }}>
-                    <span style={{
-                      fontSize: "0.75rem", fontFamily: "monospace",
-                      color: "var(--cim-fg-subtle, #5f6469)",
-                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "120px",
-                    }}>
-                      {artwork.orderId}
-                    </span>
-                    <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-muted, #94979b)" }}>
-                      {artwork.uploadDate}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Selected file name */}
-          {selected && (
-            <div style={{
-              padding: "8px 12px",
-              background: "var(--cim-bg-subtle, #f8f9fa)",
-              borderRadius: "4px",
-              fontSize: "0.875rem",
-              color: "var(--cim-fg-base, #15191d)",
-            }}>
-              Selected: <span style={{ fontWeight: 600 }}>{selected.fileName}</span>
-            </div>
-          )}
+                {/* Artwork name */}
+                <span style={{
+                  fontSize: "0.875rem",
+                  fontWeight: 400,
+                  lineHeight: "20px",
+                  color: "var(--cim-fg-base, #15191d)",
+                  display: "block",
+                }}>
+                  {art.name}
+                </span>
+                {/* Date */}
+                <span style={{
+                  fontSize: "0.875rem",
+                  lineHeight: "20px",
+                  color: "var(--cim-fg-subtle, #5f6469)",
+                  display: "block",
+                }}>
+                  {art.uploadDate}
+                </span>
+                {/* Order number */}
+                <span style={{
+                  fontSize: "0.875rem",
+                  lineHeight: "20px",
+                  color: "var(--cim-fg-subtle, #5f6469)",
+                  display: "block",
+                }}>
+                  Order: {art.orderId}
+                </span>
+              </button>
+            );
+          })}
         </div>
-      </ModalDialogBody>
+      </DrawerBody>
 
-      <ModalDialogActions>
+      <DrawerActions>
+        {/* Left: selected artwork info */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "2px" }}>
+          <span style={{ fontSize: "1rem", fontWeight: 400, color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>
+            Selected: <strong>{selected.name}</strong>
+          </span>
+          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", lineHeight: "16px" }}>
+            {selected.uploadDate}
+          </span>
+        </div>
+        {/* Right: action buttons */}
         <Button variant="secondary" onPress={onCancel}>Cancel</Button>
         <Button
           variant="primary"
-          isDisabled={!selected}
-          onPress={() => selected && onConfirm(selected)}
+          onPress={() => onConfirm(selected)}
         >
           Use this artwork
         </Button>
-      </ModalDialogActions>
-    </ModalDialog>
+      </DrawerActions>
+    </Drawer>
   );
 }

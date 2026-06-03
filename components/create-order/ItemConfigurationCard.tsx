@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef, useCallback } from "react";
-import { Button, Select, SelectItem, TextField, TextArea, Checkbox, Disclosure, Badge, Tooltip, RadioGroup, Radio, Callout } from "@cimpress-ui/react";
+import { Button, Select, SelectItem, TextField, TextArea, Checkbox, Disclosure, Badge, Tooltip, RadioGroup, Radio, Callout, ModalDialog, ModalDialogBody, ModalDialogActions, ToggleButton, ToggleButtonGroup } from "@cimpress-ui/react";
 import { IconChevronDownBold } from "@cimpress-ui/react/icons";
-import { IconInfoCircle, IconCheckCircleFill, IconChevronDown, IconTrash, IconCloseBold, IconWarning } from "@cimpress-ui/react/icons";
+import { IconInfoCircle, IconCheckCircleFill, IconChevronDown, IconCloseBold, IconWarning, IconTrash, IconPencil, IconZoomIn, IconZoomOut, IconExternalLink, IconDownload } from "@cimpress-ui/react/icons";
 import type { ProductCatalogItem, DraftOrderItem, DraftOrderItemAttribute, QuantityPricingTier } from "@/lib/types";
 import { resolvePricingTier as resolveTier, computeIncrementRanges, generateGuideQuantities } from "@/lib/pricingUtils";
 import { PreviousArtworkModal } from "./PreviousArtworkModal";
@@ -48,6 +48,7 @@ interface ItemConfigurationCardProps {
   onLineTotalChange?: (total: number) => void;
   onValidityChange?: (isValid: boolean) => void;
   onPriceBreakdownChange?: (breakdown: PriceBreakdown) => void;
+  autoOpenPriceOverride?: boolean;
 }
 
 export interface ItemConfigurationCardHandle {
@@ -222,53 +223,164 @@ const radioInputStyle: React.CSSProperties = {
 function ArtworkPreview({
   fileName,
   thumbnailUrl,
+  productImageUrl,
   onRemove,
   onChanges,
 }: {
   fileName: string;
   thumbnailUrl?: string;
+  productImageUrl?: string;
   onRemove: () => void;
   onChanges?: () => void;
 }) {
+  const [zoomOpen, setZoomOpen] = useState(false);
+  const [zoomView, setZoomView] = useState<"virtual" | "default">("virtual");
+  const [zoomScale, setZoomScale] = useState(1);
+
+  // Default View = the raw artwork the user uploaded
+  const artworkSrc = thumbnailUrl ?? "https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=300&h=300&fit=crop";
+  // Virtual View = product image with artwork imprint overlay
+  const productSrc = productImageUrl ?? "https://images.unsplash.com/photo-1585336261022-680e295ce3fe?w=300&h=300&fit=crop&auto=format&q=80";
+
+  const uploadedDate = "24 Jan 2024";
+
+  const iconBtnStyle: React.CSSProperties = {
+    width: "32px", height: "32px",
+    background: "white",
+    border: "1px solid var(--cim-border-base, #dadcdd)",
+    borderRadius: "4px",
+    boxShadow: "0px 1px 1px rgba(0,0,0,0.08), 0px 1px 3px rgba(0,0,0,0.04)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    cursor: "pointer", flexShrink: 0,
+  };
+
+  function ZoomButton({ view }: { view: "virtual" | "default" }) {
+    return (
+      <div
+        role="button"
+        aria-label="Zoom in"
+        onClick={() => { setZoomView(view); setZoomScale(1); setZoomOpen(true); }}
+        style={{ ...iconBtnStyle, position: "absolute", bottom: "8px", right: "8px", width: "30px", height: "30px" }}
+      >
+        <span style={{ width: "18px", height: "18px", display: "flex", color: "var(--cim-fg-base, #15191d)" }}><IconZoomIn /></span>
+      </div>
+    );
+  }
+
+  const views = [
+    { key: "virtual" as const, label: "Virtual View", thumb: productSrc },
+    { key: "default" as const, label: "Default View", thumb: artworkSrc },
+  ];
+
+  const activeImg = zoomView === "virtual" ? productSrc : artworkSrc;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-      {/* Thumbnail */}
-      <div style={{
-        width: "187px",
-        height: "187px",
-        borderRadius: "6px",
-        overflow: "hidden",
-        background: "var(--cim-bg-subtle, #f8f9fa)",
-      }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={thumbnailUrl ?? "https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=300&h=300&fit=crop"}
-          alt={fileName}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", lineHeight: "20px" }}>Preview</span>
+
+      <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+        {/* Virtual View card */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ position: "relative", width: "187px", height: "187px", borderRadius: "6px", border: "1px solid var(--cim-border-subtle, #eaebeb)", overflow: "hidden", background: "white" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={productSrc} alt="Product with imprint" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={artworkSrc} alt="Imprint" style={{ width: "60%", height: "40%", objectFit: "contain", opacity: 0.85, mixBlendMode: "multiply" }} />
+            </div>
+            <ZoomButton view="virtual" />
+          </div>
+          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)", lineHeight: "16px" }}>Virtual View</span>
+        </div>
+
+        {/* Default View card */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ position: "relative", width: "187px", height: "187px", borderRadius: "6px", border: "1px solid var(--cim-border-subtle, #eaebeb)", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={artworkSrc} alt={fileName} style={{ width: "100%", height: "100%", objectFit: "contain", padding: "12px" }} />
+            <ZoomButton view="default" />
+          </div>
+          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)", lineHeight: "16px" }}>Default View</span>
+        </div>
       </div>
-      {/* Actions row */}
-      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        <Button tone="critical" size="small" onPress={onRemove}>
-          Remove artwork
-        </Button>
-        {onChanges && (
-          <Button variant="secondary" size="small" onPress={onChanges}>
-            Change artwork
-          </Button>
-        )}
-        <span style={{
-          fontSize: "0.875rem",
-          color: "var(--cim-fg-base, #15191d)",
-          flex: 1,
-          minWidth: 0,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}>
-          {fileName}
-        </span>
+
+      {/* Actions */}
+      <div style={{ display: "flex", alignItems: "center" }}>
+        <Button variant="tertiary" tone="critical" size="small" iconStart={<IconTrash />} onPress={onRemove}>Remove artwork</Button>
+        <Button variant="tertiary" size="small" iconStart={<IconPencil />} onPress={onChanges}>Edit artwork</Button>
       </div>
+
+      {/* ── Zoom / Lightbox Modal ── */}
+      {zoomOpen && (
+        <ModalDialog
+          title={fileName}
+          isOpen
+          onOpenChange={(open) => { if (!open) setZoomOpen(false); }}
+          size="medium"
+        >
+          <ModalDialogBody>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0", height: "100%" }}>
+              {/* Modal body */}
+              <div style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: "500px" }}>
+                {/* Left sidebar — view thumbnails */}
+                <div style={{ width: "160px", flexShrink: 0, borderRight: "1px solid var(--cim-border-subtle, #eaebeb)", padding: "16px 12px", display: "flex", flexDirection: "column", gap: "12px", overflowY: "auto" }}>
+                  {views.map((v) => (
+                    <button
+                      key={v.key}
+                      onClick={() => { setZoomView(v.key); setZoomScale(1); }}
+                      style={{
+                        border: zoomView === v.key ? "2px solid var(--cim-fg-accent, #007798)" : "1px solid var(--cim-border-base, #dadcdd)",
+                        borderRadius: "6px",
+                        overflow: "hidden",
+                        cursor: "pointer",
+                        background: "none",
+                        padding: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "4px",
+                      }}
+                    >
+                      <div style={{ width: "100%", height: "100px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)" }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={v.thumb} alt={v.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      </div>
+                      <span style={{ fontSize: "0.75rem", color: zoomView === v.key ? "var(--cim-fg-accent, #007798)" : "var(--cim-fg-subtle, #5f6469)", padding: "4px 8px 6px", fontWeight: zoomView === v.key ? 600 : 400, textAlign: "center" }}>
+                        {v.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Main image area */}
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", position: "relative", background: "var(--cim-bg-subtle, #f8f9fa)", overflow: "hidden" }}>
+                  {/* Top-right: date + actions */}
+                  <div style={{ position: "absolute", top: "12px", right: "12px", display: "flex", alignItems: "center", gap: "8px", zIndex: 2 }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>Uploaded on: {uploadedDate}</span>
+                    <button aria-label="Open in new tab" style={iconBtnStyle}><span style={{ width: "16px", height: "16px", display: "flex" }}><IconExternalLink /></span></button>
+                    <button aria-label="Download" style={iconBtnStyle}><span style={{ width: "16px", height: "16px", display: "flex" }}><IconDownload /></span></button>
+                  </div>
+
+                  {/* Image */}
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", padding: "48px 16px 48px" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={activeImg}
+                      alt={zoomView === "virtual" ? "Virtual View" : "Default View"}
+                      style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", transform: `scale(${zoomScale})`, transition: "transform 0.2s ease", transformOrigin: "center" }}
+                    />
+                  </div>
+
+                  {/* Bottom-right: zoom controls */}
+                  <div style={{ position: "absolute", bottom: "12px", right: "12px", display: "flex", gap: "4px", zIndex: 2 }}>
+                    <button aria-label="Zoom in" onClick={() => setZoomScale(s => Math.min(s + 0.25, 3))} style={iconBtnStyle}><span style={{ width: "16px", height: "16px", display: "flex" }}><IconZoomIn /></span></button>
+                    <button aria-label="Zoom out" onClick={() => setZoomScale(s => Math.max(s - 0.25, 0.5))} style={iconBtnStyle}><span style={{ width: "16px", height: "16px", display: "flex" }}><IconZoomOut /></span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </ModalDialogBody>
+        </ModalDialog>
+      )}
     </div>
   );
 }
@@ -308,7 +420,7 @@ function SwatchButton({
 }
 
 export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, ItemConfigurationCardProps>(
-  ({ product, initialValues, onAddToOrder, onLineTotalChange, onValidityChange, onPriceBreakdownChange }, ref) => {
+  ({ product, initialValues, onAddToOrder, onLineTotalChange, onValidityChange, onPriceBreakdownChange, autoOpenPriceOverride }, ref) => {
     const attributesRef = useRef<HTMLDivElement>(null);
     const quantityRef = useRef<HTMLDivElement>(null);
     const artworkRef = useRef<HTMLDivElement>(null);
@@ -379,6 +491,7 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [showAllAccessories, setShowAllAccessories] = useState(false);
     const [isChargesExpanded, setIsChargesExpanded] = useState(false);
     const [isAccessoriesExpanded, setIsAccessoriesExpanded] = useState(false);
+    const [isRemoveAccessoriesConfirmOpen, setIsRemoveAccessoriesConfirmOpen] = useState(false);
     const [isCustomizedOfferExpanded, setIsCustomizedOfferExpanded] = useState(false);
     const [accOfferTypes, setAccOfferTypes] = useState<Record<string, "pct" | "unit" | "flat" | null>>({});
     const [accPctInputs, setAccPctInputs] = useState<Record<string, string>>({});
@@ -402,6 +515,9 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
     const [savedAccessoryOverridePrices, setSavedAccessoryOverridePrices] = useState<Record<string, number>>({});
     const [priceOverrideQty, setPriceOverrideQty] = useState<string>("");
     const [priceOverrideAccessoryQuantities, setPriceOverrideAccessoryQuantities] = useState<Record<string, string>>({});
+    const [priceOverrideChargePrices, setPriceOverrideChargePrices] = useState<Record<string, string>>({});
+    const [priceOverrideItemPriceInput, setPriceOverrideItemPriceInput] = useState<string>("");
+    const [priceOverrideAccessoryItemPrices, setPriceOverrideAccessoryItemPrices] = useState<Record<string, string>>({});
     const [isEditChargesOpen, setIsEditChargesOpen] = useState(false);
     const [savedWaivedChargeIds, setSavedWaivedChargeIds] = useState<string[]>([]);
     const [savedWaiveReason, setSavedWaiveReason] = useState<string>("");
@@ -707,6 +823,30 @@ export const ItemConfigurationCard = forwardRef<ItemConfigurationCardHandle, Ite
       }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeOfferType, pctBasedInput, newPriceInput, newUnitPriceInput, quantity]);
+
+    // Auto-open price override modal when navigated via "Edit price override" menu
+    useEffect(() => {
+      if (autoOpenPriceOverride) setIsPriceOverrideOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoOpenPriceOverride]);
+
+    // Initialise price override modal fields with original prices when modal opens
+    useEffect(() => {
+      if (isPriceOverrideOpen) {
+        setPriceOverrideUnitPrice(unitPrice.toFixed(2));
+        setPriceOverrideItemPriceInput(basePrice.toFixed(2));
+        // Pre-fill accessory unit + item prices with their originals
+        const unitPrices: Record<string, string> = {};
+        const itemPrices: Record<string, string> = {};
+        addedAccessories.forEach((acc) => {
+          unitPrices[acc.id] = acc.unitPrice.toFixed(2);
+          itemPrices[acc.id] = (acc.unitPrice * acc.quantity).toFixed(2);
+        });
+        setPriceOverrideAccessoryPrices(unitPrices);
+        setPriceOverrideAccessoryItemPrices(itemPrices);
+      }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isPriceOverrideOpen]);
 
 const handleSubmit = useCallback(() => {
       const item: DraftOrderItem = {
@@ -1128,48 +1268,56 @@ const handleSubmit = useCallback(() => {
 
           {/* Imprint section */}
           <div ref={artworkRef} style={{ ...sectionCard }}>
-            {/* Header row */}
+            {/* Header row: title + charge note | Refresh Artwork link */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1 }}>
                 <p style={sectionHeading}>Imprint</p>
-                <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+                <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-base, #15191d)" }}>
                   ( An extra charge of 10.00 USD will be applicable )
                 </span>
               </div>
+              <button
+                onClick={() => { setArtworkFileName(""); setArtworkThumbnailUrl(""); setArtworkOption(null); }}
+                style={{
+                  background: "none", border: "none", cursor: "pointer", fontSize: "0.875rem",
+                  color: artworkFileName ? "var(--cim-fg-accent, #007798)" : "var(--cim-fg-muted, #94979b)",
+                  textDecoration: "underline", padding: 0, whiteSpace: "nowrap",
+                }}
+              >
+                Refresh Artwork
+              </button>
+            </div>
+
+            {/* Buttons row — always visible */}
+            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              <a
+                href="https://pens.experience.cimpress.io/us/studio/?key=PRD-ZQO1BK4YA&productVersion=4&locale=en-us"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ textDecoration: "none" }}
+                onClick={() => { setArtworkOption("new"); waitingForStudio.current = true; }}
+              >
+                <Button variant="secondary" size="medium">Add new imprint</Button>
+              </a>
               <Button
-                variant="secondary"
-                size="small"
+                variant="tertiary"
+                size="medium"
                 onPress={() => { setArtworkOption("customise"); setIsArtworkModalOpen(true); }}
               >
                 Customise as before
               </Button>
             </div>
 
-            {/* File upload row */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Add new imprint</span>
-                <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-critical, #d10023)" }}>*</span>
-              </div>
-              {artworkFileName ? (
-                <ArtworkPreview fileName={artworkFileName} thumbnailUrl={artworkThumbnailUrl || undefined} onRemove={() => { setArtworkFileName(""); setArtworkThumbnailUrl(""); }} onChanges={() => setIsArtworkModalOpen(true)} />
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <a
-                    href="https://pens.experience.cimpress.io/us/studio/?key=PRD-ZQO1BK4YA&productVersion=4&locale=en-us"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ textDecoration: "none" }}
-                    onClick={() => { setArtworkOption("new"); waitingForStudio.current = true; }}
-                  >
-                    <Button variant="secondary" size="small">Choose file</Button>
-                  </a>
-                  <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                    (This will open a new tab for studio where you can create/add a new imprint for this item)
-                  </span>
-                </div>
-              )}
-            </div>
+            {/* Artwork preview (only when file selected) */}
+            {artworkFileName && (
+              <ArtworkPreview
+                fileName={artworkFileName}
+                thumbnailUrl={artworkThumbnailUrl || undefined}
+                productImageUrl={product.imageUrl}
+                onRemove={() => { setArtworkFileName(""); setArtworkThumbnailUrl(""); }}
+                onChanges={() => setIsArtworkModalOpen(true)}
+              />
+            )}
           </div>
 
           {/* Extra charges section — hidden from view */}
@@ -1233,7 +1381,7 @@ const handleSubmit = useCallback(() => {
             return (
               <div ref={addOnsRef} style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", overflow: "hidden" }}>
                 <Disclosure title={`Add Accessory (${addedCount})`} variant="subtle">
-                  <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "4px 16px 16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "4px 16px 16px" }}>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                       {visibleAccessories.map((acc) => {
                         const isAdded = addedAccessories.some((a) => a.id === acc.id);
@@ -1273,566 +1421,61 @@ const handleSubmit = useCallback(() => {
             background: "white",
             border: "1px solid var(--cim-border-base, #dadcdd)",
             borderRadius: "6px",
+            padding: "12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
           }}>
-            {/* Section heading */}
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--cim-border-subtle, #eaebeb)" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
-                <div>
-                  <p style={{ ...sectionHeading, margin: "0 0 2px" }}>Customise offer</p>
-                  <span style={{ fontSize: "0.75rem", lineHeight: "16px", color: "var(--cim-fg-base, #15191d)" }}>
-                    Choose any of the options to customise the current item price of {basePrice > 0 ? `${basePrice.toFixed(2)} USD` : "0.00 USD"}
-                  </span>
-                </div>
-                {activeOfferType !== null && (
-                  <button
-                    onClick={() => { setActiveOfferType(null); setPctBasedInput(""); setNewPriceInput(""); setNewUnitPriceInput(""); }}
-                    style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", flexShrink: 0, whiteSpace: "nowrap" }}
-                  >
-                    Clear selection
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Main item */}
-            <div style={{ padding: "0 16px 16px" }}>
-              <p style={{ margin: "12px 0 12px", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>Main item</p>
-              <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "16px" }}>
-                <div style={{ width: 60, height: 60, borderRadius: 8, background: "var(--cim-bg-subtle, #f8f9fa)", overflow: "hidden", flexShrink: 0 }}>
-                  {product.imageUrl ? <img src={product.imageUrl} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", background: "var(--cim-bg-subtle)" }} />}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ marginBottom: "2px" }}>
-                    <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{product.name}</p>
-                  </div>
-                  <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                    Original price {basePrice > 0 ? `${basePrice.toFixed(2)} USD` : "—"}{quantity > 0 ? ` (${quantity} x ${unitPrice.toFixed(2)}/unit)` : ""}
-                  </p>
-                </div>
-              </div>
-
-              <RadioGroup
-                value={activeOfferType ?? ""}
-                onChange={(v) => {
-                  const next = v as "pct" | "unit" | "flat";
-                  setActiveOfferType(next);
-                  if (next === "unit" && !newUnitPriceInput && unitPrice > 0) {
-                    setNewUnitPriceInput(unitPrice.toFixed(2));
-                  }
-                  if (next === "flat" && !newPriceInput && basePrice > 0) {
-                    setNewPriceInput(basePrice.toFixed(2));
-                  }
-                }}
-                aria-label="Main item offer type"
-                direction="horizontal"
-                UNSAFE_style={{ "--cim-stack-gap-sm": "48px" } as React.CSSProperties}
+            {/* Title + Clear */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>Apply discount</span>
+              <Button
+                variant="tertiary"
+                size="small"
+                isDisabled={!pctBasedInput}
+                onPress={() => { setPctBasedInput(""); setOfferDiscountPct(0); setActiveOfferType(null); setOverrideReason(""); }}
               >
-                <Radio value="pct">% Based pricing</Radio>
-                <Radio value="unit">Unit price discount</Radio>
-                <Radio value="flat">Flat price discount</Radio>
-              </RadioGroup>
-
-              {/* % Based pricing panel */}
-              {activeOfferType === "pct" && (() => {
-                const pct = parseFloat(pctBasedInput);
-                const discountAmt = pct > 0 && basePrice > 0 ? parseFloat((basePrice * pct / 100).toFixed(2)) : NaN;
-                const newItemPrice = !isNaN(discountAmt) ? parseFloat((basePrice - discountAmt).toFixed(2)) : NaN;
-                const showWarning = pct > 10;
-                return (
-                  <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
-                      <div style={{ flex: "1 1 0" }}>
-                        <TextField
-                          label="Discount Percentage"
-                          value={pctBasedInput}
-                          onChange={(val) => { setPctBasedInput(val); setOfferDiscountPct(parseFloat(val) || 0); }}
-                          type="number"
-                          suffix="%"
-                          description="Will require approval for more than 10% discount"
-                          onKeyDown={(e) => {
-                            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-                            e.preventDefault();
-                            const cur = parseFloat(pctBasedInput) || 0;
-                            const next = Math.max(0, Math.min(100, parseFloat((cur + (e.key === "ArrowUp" ? 0.01 : -0.01)).toFixed(2))));
-                            const s = next.toFixed(2);
-                            setPctBasedInput(s);
-                            setOfferDiscountPct(next);
-                          }}
-                        />
-                      </div>
-                      <div style={{ flex: "1 1 0" }}>
-                        <TextField
-                          label="New item price"
-                          value={!isNaN(newItemPrice) ? newItemPrice.toFixed(2) : ""}
-                          placeholder="0.00"
-                          prefix="USD"
-                          isReadOnly
-                        />
-                      </div>
-                      <div style={{ flex: "1 1 0" }}>
-                        <TextField
-                          label="Discount"
-                          value={!isNaN(discountAmt) ? discountAmt.toFixed(2) : ""}
-                          placeholder="0.00"
-                          prefix="USD"
-                          isReadOnly
-                        />
-                      </div>
-                    </div>
-                    {!isNaN(newItemPrice) && basePrice > 0 && discountAmt > 0 && (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", borderTop: "1px solid var(--cim-border-subtle, #eaebeb)", paddingTop: "8px" }}>
-                        <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>New item price</span>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-                          <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{basePrice.toFixed(2)} USD</span>
-                          <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{newItemPrice.toFixed(2)} USD</span>
-                          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>(Excluding tax)</span>
-                        </div>
-                        <span style={{ fontSize: "0.875rem", fontWeight: 400, color: "var(--cim-fg-success, #007e3f)" }}>
-                          Savings of {discountAmt.toFixed(2)} USD due to unit price change
-                        </span>
-                      </div>
-                    )}
-                    {showWarning && (
-                      <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* Unit price discount panel */}
-              {activeOfferType === "unit" && (() => {
-                const newUnitP = newUnitPriceInput !== "" ? parseFloat(newUnitPriceInput) : NaN;
-                const newItemPrice = !isNaN(newUnitP) && quantity > 0 ? parseFloat((newUnitP * quantity).toFixed(2)) : NaN;
-                const discountAmt = !isNaN(newItemPrice) && basePrice > 0 ? parseFloat((basePrice - newItemPrice).toFixed(2)) : NaN;
-                const approvalThreshold = basePrice > 0 ? parseFloat((basePrice * 0.9).toFixed(2)) : 0;
-                const showWarning = !isNaN(newItemPrice) && basePrice > 0 && newItemPrice < approvalThreshold;
-                return (
-                  <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
-                      <div style={{ flex: "1 1 0" }}>
-                        <TextField
-                          label="Unit price"
-                          value={newUnitPriceInput}
-                          onChange={(val) => { setNewUnitPriceInput(val); }}
-                          type="number"
-                          prefix="USD"
-                          placeholder={unitPrice.toFixed(2)}
-                          description={approvalThreshold > 0 ? `Will require approval for amount below ${approvalThreshold.toFixed(2)} USD` : undefined}
-                          onKeyDown={(e) => {
-                            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-                            e.preventDefault();
-                            const cur = parseFloat(newUnitPriceInput) || 0;
-                            const next = Math.max(0, parseFloat((cur + (e.key === "ArrowUp" ? 0.01 : -0.01)).toFixed(2)));
-                            setNewUnitPriceInput(next.toFixed(2));
-                          }}
-                        />
-                      </div>
-                      <div style={{ flex: "1 1 0" }}>
-                        <TextField
-                          label="New item price"
-                          value={!isNaN(newItemPrice) ? newItemPrice.toFixed(2) : ""}
-                          placeholder="0.00"
-                          prefix="USD"
-                          isReadOnly
-                        />
-                      </div>
-                      <div style={{ flex: "1 1 0" }}>
-                        <TextField
-                          label="Discount"
-                          value={!isNaN(discountAmt) ? discountAmt.toFixed(2) : ""}
-                          placeholder="0.00"
-                          prefix="USD"
-                          isReadOnly
-                        />
-                      </div>
-                    </div>
-                    {!isNaN(newItemPrice) && basePrice > 0 && discountAmt > 0 && (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", borderTop: "1px solid var(--cim-border-subtle, #eaebeb)", paddingTop: "8px" }}>
-                        <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>New item price</span>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-                          <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{basePrice.toFixed(2)} USD</span>
-                          <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{newItemPrice.toFixed(2)} USD</span>
-                          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>(Excluding tax)</span>
-                        </div>
-                        <span style={{ fontSize: "0.875rem", fontWeight: 400, color: "var(--cim-fg-success, #007e3f)" }}>
-                          Savings of {discountAmt.toFixed(2)} USD due to unit price change
-                        </span>
-                      </div>
-                    )}
-                    {showWarning && (
-                      <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* Flat price discount panel */}
-              {activeOfferType === "flat" && (() => {
-                const flatPrice = newPriceInput !== "" ? parseFloat(newPriceInput) : NaN;
-                const discountAmt = !isNaN(flatPrice) && basePrice > 0 ? parseFloat((basePrice - flatPrice).toFixed(2)) : NaN;
-                const approvalThreshold = basePrice > 0 ? parseFloat((basePrice * 0.9).toFixed(2)) : 0;
-                const showWarning = !isNaN(flatPrice) && basePrice > 0 && flatPrice < approvalThreshold;
-                return (
-                  <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
-                      <div style={{ flex: "1 1 0" }}>
-                        <TextField
-                          label="Item price"
-                          value={newPriceInput}
-                          onChange={(val) => { setNewPriceInput(val); }}
-                          type="number"
-                          prefix="USD"
-                          placeholder={basePrice.toFixed(2)}
-                          description={approvalThreshold > 0 ? `Will require approval for amount below ${approvalThreshold.toFixed(2)} USD` : undefined}
-                          onKeyDown={(e) => {
-                            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-                            e.preventDefault();
-                            const cur = parseFloat(newPriceInput) || 0;
-                            const next = Math.max(0, parseFloat((cur + (e.key === "ArrowUp" ? 0.01 : -0.01)).toFixed(2)));
-                            setNewPriceInput(next.toFixed(2));
-                          }}
-                        />
-                      </div>
-                      <div style={{ flex: "1 1 0" }}>
-                        <TextField
-                          label="Discount"
-                          value={!isNaN(discountAmt) ? discountAmt.toFixed(2) : ""}
-                          placeholder="0.00"
-                          prefix="USD"
-                          isReadOnly
-                        />
-                      </div>
-                    </div>
-                    {!isNaN(flatPrice) && !isNaN(discountAmt) && discountAmt > 0 && basePrice > 0 && (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", borderTop: "1px solid var(--cim-border-subtle, #eaebeb)", paddingTop: "8px" }}>
-                        <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-subtle, #5f6469)" }}>New item price</span>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-                          <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{basePrice.toFixed(2)} USD</span>
-                          <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{flatPrice.toFixed(2)} USD</span>
-                          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>(Excluding tax)</span>
-                        </div>
-                        <span style={{ fontSize: "0.875rem", fontWeight: 400, color: "var(--cim-fg-success, #007e3f)" }}>
-                          Savings of {discountAmt.toFixed(2)} USD due to unit price change
-                        </span>
-                      </div>
-                    )}
-                    {showWarning && (
-                      <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
-                    )}
-                  </div>
-                );
-              })()}
+                Clear
+              </Button>
             </div>
 
-            {/* Per-accessory offer customization */}
-            {addedAccessories.map((acc) => {
-              const accType = accOfferTypes[acc.id] ?? null;
-              const accPct = accPctInputs[acc.id] ?? "";
-              const accOriginalTotal = parseFloat((acc.quantity * acc.unitPrice).toFixed(2));
-              const accItemPrice = accItemPriceInputs[acc.id] ?? "";
-              const accUnitPrice = accUnitPriceInputs[acc.id] ?? "";
-              const parsedAccItemPrice = accItemPrice !== "" ? parseFloat(accItemPrice) : NaN;
-              const accDiscountAmt = !isNaN(parsedAccItemPrice) && accOriginalTotal > 0
-                ? parseFloat((accOriginalTotal - parsedAccItemPrice).toFixed(2))
-                : NaN;
-              return (
-                <div key={acc.id} style={{ borderTop: "1px solid var(--cim-border-base, #dadcdd)", padding: "0 16px 16px" }}>
-                  <p style={{ margin: "12px 0 12px", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>Accessory</p>
-                  <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "16px" }}>
-                    <div style={{ width: 60, height: 60, borderRadius: 8, background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2px" }}>
-                        <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{acc.label}</p>
-                        {accType !== null && (
-                          <button
-                            onClick={() => {
-                              setAccOfferTypes((prev) => ({ ...prev, [acc.id]: null }));
-                              setAccPctInputs((prev) => ({ ...prev, [acc.id]: "" }));
-                              setAccItemPriceInputs((prev) => ({ ...prev, [acc.id]: "" }));
-                              setAccUnitPriceInputs((prev) => ({ ...prev, [acc.id]: "" }));
-                            }}
-                            style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", flexShrink: 0 }}
-                          >
-                            Clear selection
-                          </button>
-                        )}
-                      </div>
-                      <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                        Original price {accOriginalTotal.toFixed(2)} USD ({acc.quantity} x {acc.unitPrice.toFixed(2)}/unit)
-                      </p>
-                    </div>
-                  </div>
+            {/* 1–10% preset toggle chips */}
+            <ToggleButtonGroup
+              selectionMode="single"
+              selectedKeys={pctBasedInput ? new Set([pctBasedInput]) : new Set()}
+              onSelectionChange={(keys) => {
+                const selected = [...keys][0]?.toString() ?? "";
+                setPctBasedInput(selected);
+                setOfferDiscountPct(parseFloat(selected) || 0);
+                if (selected) setActiveOfferType("pct");
+                else setActiveOfferType(null);
+              }}
+              wrap
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                <ToggleButton key={n} value={String(n)}>{n}%</ToggleButton>
+              ))}
+            </ToggleButtonGroup>
 
-                  <RadioGroup
-                    value={accType ?? ""}
-                    onChange={(v) => {
-                      const next = v as "pct" | "unit" | "flat";
-                      setAccOfferTypes((prev) => ({ ...prev, [acc.id]: next }));
-                      if (next === "unit" && !accUnitPriceInputs[acc.id] && acc.unitPrice > 0) {
-                        setAccUnitPriceInputs((prev) => ({ ...prev, [acc.id]: acc.unitPrice.toFixed(2) }));
-                      }
-                      if (next === "flat" && !accItemPriceInputs[acc.id] && accOriginalTotal > 0) {
-                        setAccItemPriceInputs((prev) => ({ ...prev, [acc.id]: accOriginalTotal.toFixed(2) }));
-                      }
-                    }}
-                    aria-label={`Offer type for ${acc.label}`}
-                    direction="horizontal"
-                    UNSAFE_style={{ "--cim-stack-gap-sm": "48px" } as React.CSSProperties}
-                  >
-                    <Radio value="pct">% Based pricing</Radio>
-                    <Radio value="unit">Unit price discount</Radio>
-                    <Radio value="flat">Flat price discount</Radio>
-                  </RadioGroup>
+            {/* Reason for providing discount */}
+            <Select
+              label="Reason for providing discount"
+              isRequired
+              selectedKey={overrideReason || null}
+              onSelectionChange={(key) => setOverrideReason(key as string)}
+              placeholder="Select"
+              UNSAFE_style={{ maxWidth: "320px" }}
+            >
+              <SelectItem id="promotional">Promotional offer</SelectItem>
+              <SelectItem id="loyalty_discount">Loyalty discount</SelectItem>
+              <SelectItem id="bulk_deal">Bulk deal</SelectItem>
+              <SelectItem id="error_correction">Error correction</SelectItem>
+              <SelectItem id="manager_approval">Manager approval</SelectItem>
+              <SelectItem id="other">Other</SelectItem>
+            </Select>
 
-                  {accType === "pct" && (() => {
-                    const pct = parseFloat(accPct);
-                    const accDisc = pct > 0 && accOriginalTotal > 0 ? parseFloat((accOriginalTotal * pct / 100).toFixed(2)) : NaN;
-                    const accNewItemPrice = !isNaN(accDisc) ? parseFloat((accOriginalTotal - accDisc).toFixed(2)) : NaN;
-                    return (
-                      <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
-                          <div style={{ flex: "1 1 0" }}>
-                            <TextField
-                              label="Discount Percentage"
-                              value={accPct}
-                              onChange={(val) => setAccPctInputs((prev) => ({ ...prev, [acc.id]: val }))}
-                              type="number"
-                              suffix="%"
-                              description="Will require approval for more than 10% discount"
-                              onKeyDown={(e) => {
-                                if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-                                e.preventDefault();
-                                const cur = parseFloat(accPct) || 0;
-                                const next = Math.max(0, Math.min(100, parseFloat((cur + (e.key === "ArrowUp" ? 0.01 : -0.01)).toFixed(2))));
-                                setAccPctInputs((prev) => ({ ...prev, [acc.id]: next.toFixed(2) }));
-                              }}
-                            />
-                          </div>
-                          <div style={{ flex: "1 1 0" }}>
-                            <TextField
-                              label="New item price"
-                              value={!isNaN(accNewItemPrice) ? accNewItemPrice.toFixed(2) : ""}
-                              placeholder="0.00"
-                              prefix="USD"
-                              isReadOnly
-                            />
-                          </div>
-                          <div style={{ flex: "1 1 0" }}>
-                            <TextField
-                              label="Discount"
-                              value={!isNaN(accDisc) ? accDisc.toFixed(2) : ""}
-                              placeholder="0.00"
-                              prefix="USD"
-                              isReadOnly
-                            />
-                          </div>
-                        </div>
-                        {pct > 10 && (
-                          <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
-                        )}
-                      </div>
-                    );
-                  })()}
 
-                  {accType === "unit" && (() => {
-                    const newAccUnitP = accUnitPrice !== "" ? parseFloat(accUnitPrice) : NaN;
-                    const accNewItemPrice = !isNaN(newAccUnitP) && acc.quantity > 0 ? parseFloat((newAccUnitP * acc.quantity).toFixed(2)) : NaN;
-                    const accDisc = !isNaN(accNewItemPrice) ? parseFloat((accOriginalTotal - accNewItemPrice).toFixed(2)) : NaN;
-                    const accThreshold = parseFloat((accOriginalTotal * 0.9).toFixed(2));
-                    const showWarning = !isNaN(accNewItemPrice) && accNewItemPrice < accThreshold;
-                    return (
-                      <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
-                          <div style={{ flex: "1 1 0" }}>
-                            <TextField
-                              label="Unit price"
-                              value={accUnitPrice}
-                              onChange={(val) => setAccUnitPriceInputs((prev) => ({ ...prev, [acc.id]: val }))}
-                              type="number"
-                              prefix="USD"
-                              placeholder={acc.unitPrice.toFixed(2)}
-                              description={`Will require approval for amount below ${accThreshold.toFixed(2)} USD`}
-                              onKeyDown={(e) => {
-                                if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-                                e.preventDefault();
-                                const cur = parseFloat(accUnitPrice) || 0;
-                                const next = Math.max(0, parseFloat((cur + (e.key === "ArrowUp" ? 0.01 : -0.01)).toFixed(2)));
-                                setAccUnitPriceInputs((prev) => ({ ...prev, [acc.id]: next.toFixed(2) }));
-                              }}
-                            />
-                          </div>
-                          <div style={{ flex: "1 1 0" }}>
-                            <TextField
-                              label="New item price"
-                              value={!isNaN(accNewItemPrice) ? accNewItemPrice.toFixed(2) : ""}
-                              placeholder="0.00"
-                              prefix="USD"
-                              isReadOnly
-                            />
-                          </div>
-                          <div style={{ flex: "1 1 0" }}>
-                            <TextField
-                              label="Discount"
-                              value={!isNaN(accDisc) ? accDisc.toFixed(2) : ""}
-                              placeholder="0.00"
-                              prefix="USD"
-                              isReadOnly
-                            />
-                          </div>
-                        </div>
-                        {showWarning && (
-                          <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
-                        )}
-                      </div>
-                    );
-                  })()}
 
-                  {accType === "flat" && (() => {
-                    const accDisc = !isNaN(parsedAccItemPrice) && accOriginalTotal > 0 ? parseFloat((accOriginalTotal - parsedAccItemPrice).toFixed(2)) : NaN;
-                    const accThreshold = parseFloat((accOriginalTotal * 0.9).toFixed(2));
-                    const showWarning = !isNaN(parsedAccItemPrice) && parsedAccItemPrice < accThreshold;
-                    return (
-                      <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
-                          <div style={{ flex: "1 1 0" }}>
-                            <TextField
-                              label="Item price"
-                              value={accItemPrice}
-                              onChange={(val) => setAccItemPriceInputs((prev) => ({ ...prev, [acc.id]: val }))}
-                              type="number"
-                              prefix="USD"
-                              placeholder={accOriginalTotal.toFixed(2)}
-                              description={`Will require approval for amount below ${accThreshold.toFixed(2)} USD`}
-                              onKeyDown={(e) => {
-                                if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-                                e.preventDefault();
-                                const cur = parseFloat(accItemPrice) || 0;
-                                const next = Math.max(0, parseFloat((cur + (e.key === "ArrowUp" ? 0.01 : -0.01)).toFixed(2)));
-                                setAccItemPriceInputs((prev) => ({ ...prev, [acc.id]: next.toFixed(2) }));
-                              }}
-                            />
-                          </div>
-                          <div style={{ flex: "1 1 0" }}>
-                            <TextField
-                              label="Discount"
-                              value={!isNaN(accDisc) ? accDisc.toFixed(2) : ""}
-                              placeholder="0.00"
-                              prefix="USD"
-                              isReadOnly
-                            />
-                          </div>
-                        </div>
-                        {showWarning && (
-                          <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
-              );
-            })}
-
-            {/* Customization summary — Disclosure */}
-            {(activeOfferType !== null || addedAccessories.some((acc) => (accOfferTypes[acc.id] ?? null) !== null)) && (() => {
-              let mainItemDiscount = 0;
-              if (activeOfferType === "pct" && parseFloat(pctBasedInput) > 0 && basePrice > 0) {
-                mainItemDiscount = parseFloat((basePrice * parseFloat(pctBasedInput) / 100).toFixed(2));
-              } else if (activeOfferType === "unit" && newUnitPriceInput !== "" && quantity > 0 && basePrice > 0) {
-                const up = parseFloat(newUnitPriceInput);
-                if (!isNaN(up)) mainItemDiscount = parseFloat((basePrice - up * quantity).toFixed(2));
-              } else if (activeOfferType === "flat" && newPriceInput !== "" && basePrice > 0) {
-                const p = parseFloat(newPriceInput);
-                if (!isNaN(p) && p >= 0) mainItemDiscount = parseFloat((basePrice - p).toFixed(2));
-              }
-              const discountedItemTotal = parseFloat((basePrice - mainItemDiscount).toFixed(2));
-              let totalAccDiscount = 0;
-              addedAccessories.forEach((acc) => {
-                const aType = accOfferTypes[acc.id] ?? null;
-                const aOrigTotal = parseFloat((acc.quantity * acc.unitPrice).toFixed(2));
-                if (aType === "pct") {
-                  const pct = parseFloat(accPctInputs[acc.id] ?? "");
-                  if (pct > 0) totalAccDiscount += parseFloat((aOrigTotal * pct / 100).toFixed(2));
-                } else if (aType === "unit") {
-                  const up = parseFloat(accUnitPriceInputs[acc.id] ?? "");
-                  if (!isNaN(up) && acc.quantity > 0) totalAccDiscount += parseFloat((aOrigTotal - up * acc.quantity).toFixed(2));
-                } else if (aType === "flat") {
-                  const ip = parseFloat(accItemPriceInputs[acc.id] ?? "");
-                  if (!isNaN(ip) && ip >= 0) totalAccDiscount += parseFloat((aOrigTotal - ip).toFixed(2));
-                }
-              });
-              const discountedAccTotal = parseFloat((accessoriesTotal - totalAccDiscount).toFixed(2));
-              const totalDiscount = parseFloat((mainItemDiscount + totalAccDiscount).toFixed(2));
-              const origTotal = parseFloat((basePrice + extraChargesTotal + accessoriesTotal).toFixed(2));
-              const newTotal = parseFloat((discountedItemTotal + extraChargesTotal + discountedAccTotal).toFixed(2));
-              const hasAnyDiscount = totalDiscount > 0;
-
-              return (
-                <>
-                  {/* Disclosure for line-item breakdown */}
-                  <div style={{ borderTop: "1px solid var(--cim-border-base, #dadcdd)" }}>
-                    <Disclosure title="Customization summary" variant="subtle">
-                      <div style={{ display: "flex", flexDirection: "column", gap: "8px", padding: "4px 16px 12px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                          <span>Item total</span>
-                          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            {mainItemDiscount > 0 && <span style={{ color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{basePrice.toFixed(2)} USD</span>}
-                            <span>{discountedItemTotal.toFixed(2)} USD</span>
-                          </span>
-                        </div>
-                        {addedAccessories.length > 0 && (
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                            <span>Accessories total</span>
-                            <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              {totalAccDiscount > 0 && <span style={{ color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{accessoriesTotal.toFixed(2)} USD</span>}
-                              <span>{discountedAccTotal.toFixed(2)} USD</span>
-                            </span>
-                          </div>
-                        )}
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>
-                          <span>Item charges</span>
-                          <span>{extraChargesTotal.toFixed(2)} USD</span>
-                        </div>
-                      </div>
-                    </Disclosure>
-                  </div>
-
-                  {/* Always-visible footer: new item total + reason */}
-                  <div style={{ borderTop: "1px solid var(--cim-border-base, #dadcdd)", padding: "12px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
-                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)", paddingTop: "4px" }}>new Item total</span>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
-                          {hasAnyDiscount && (
-                            <span style={{ fontSize: "1.125rem", fontWeight: 400, color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through", lineHeight: "28px" }}>{origTotal.toFixed(2)} USD</span>
-                          )}
-                          <span style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "36px" }}>{newTotal.toFixed(2)} USD</span>
-                        </div>
-                        {hasAnyDiscount && (
-                          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-success, #007e3f)", fontWeight: 500 }}>
-                            Total discount of {totalDiscount.toFixed(2)} USD
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <Select
-                      label="Select reason for offer customization"
-                      aria-label="Reason for Offer customization"
-                      selectedKey={overrideReason || null}
-                      onSelectionChange={(key) => setOverrideReason(key as string)}
-                      placeholder="Select an item"
-                      isRequired
-                    >
-                      <SelectItem id="loyalty_discount">Loyalty discount</SelectItem>
-                      <SelectItem id="bulk_deal">Bulk deal</SelectItem>
-                      <SelectItem id="promotional">Promotional offer</SelectItem>
-                      <SelectItem id="error_correction">Error correction</SelectItem>
-                      <SelectItem id="manager_approval">Manager approval</SelectItem>
-                      <SelectItem id="other">Other</SelectItem>
-                    </Select>
-                  </div>
-                </>
-              );
-            })()}
           </div>
 
           {/* Item price section */}
@@ -1912,14 +1555,6 @@ const handleSubmit = useCallback(() => {
                           <IconChevronDown size={16} />
                         </span>
                       </button>
-                      {chargesApplied > 0 && (
-                        <button
-                          onClick={() => setSavedWaivedChargeIds(allExtraCharges.map((c) => c.id))}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", alignItems: "center" }}
-                        >
-                          <IconTrash size={16} />
-                        </button>
-                      )}
                     </span>
                     <span>{extraChargesTotal.toFixed(2)} USD</span>
                   </div>
@@ -1960,8 +1595,9 @@ const handleSubmit = useCallback(() => {
                         </span>
                       </button>
                       <button
-                        onClick={() => setAddedAccessories([])}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", alignItems: "center" }}
+                        onClick={(e) => { e.stopPropagation(); setIsRemoveAccessoriesConfirmOpen(true); }}
+                        aria-label="Remove all accessories"
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", alignItems: "center", padding: "2px" }}
                       >
                         <IconTrash size={16} />
                       </button>
@@ -1982,58 +1618,13 @@ const handleSubmit = useCallback(() => {
               )}
 
               {/* Customized offer — only shown when a pct/price discount has been saved (no price override active) */}
+              {/* Custom discount row — shown when a % discount is applied */}
               {discountAmount > 0 && priceOverrideDiscountAmount === 0 && (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                      <button
-                        onClick={() => setIsCustomizedOfferExpanded((v) => !v)}
-                        style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}
-                      >
-                        Customized offer
-                        <span style={{ display: "flex", color: "var(--cim-fg-subtle, #5f6469)", transform: isCustomizedOfferExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>
-                          <IconChevronDown size={16} />
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSavedOfferDiscountPct(0);
-                          setSavedNewPriceInput("");
-                          setOfferDiscountPct(0);
-                          setPctBasedInput("");
-                          setNewPriceInput("");
-                          setNewUnitPriceInput("");
-                          setActiveOfferType(null);
-                          setIsCustomizedOfferExpanded(false);
-                        }}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cim-fg-subtle, #5f6469)", display: "flex", alignItems: "center" }}
-                      >
-                        <IconTrash size={16} />
-                      </button>
-                    </span>
-                    <span style={{ color: "var(--cim-fg-success, #007e3f)" }}>- {discountAmount.toFixed(2)} USD</span>
-                  </div>
-                  {isCustomizedOfferExpanded && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "6px", paddingLeft: "12px" }}>
-                      {savedNewPriceValid && savedNewPriceInput !== "" ? (
-                        <>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                            <span>New item price</span>
-                            <span>{parseFloat(savedNewPriceInput).toFixed(2)} USD</span>
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                            <span>Discount</span>
-                            <span>−{discountAmount.toFixed(2)} USD</span>
-                          </div>
-                        </>
-                      ) : savedOfferDiscountPct > 0 ? (
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                          <span>Discount ({savedOfferDiscountPct}%)</span>
-                          <span>−{discountAmount.toFixed(2)} USD</span>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", color: "var(--cim-fg-success, #007e3f)" }}>
+                  <span>
+                    Custom discount{savedOfferDiscountPct > 0 ? ` (${savedOfferDiscountPct}%)` : ""}
+                  </span>
+                  <span>-{discountAmount.toFixed(2)} USD</span>
                 </div>
               )}
 
@@ -2082,20 +1673,62 @@ const handleSubmit = useCallback(() => {
                 );
               })()}
 
-              {/* Warning callout — shown when the actual combined discount rate exceeds 10% of item total */}
-              {(() => {
-                const itemBase = basePrice + accessoriesTotal;
-                const actualDiscountPct = itemBase > 0 ? (discountAmount / itemBase) * 100 : 0;
-                const showWarning = priceOverrideDiscountAmount > 0 || (discountAmount > 0 && actualDiscountPct > 10);
-                return showWarning ? (
-                  <Callout tone="warning">This price will require approval as it exceeds 10% discount threshold</Callout>
-                ) : null;
-              })()}
+              {/* Info banner — "Need more than 10% discount? Use price override" */}
+              <div style={{
+                background: "white",
+                border: "1px solid var(--cim-border-base, #dadcdd)",
+                borderRadius: "8px",
+                padding: "9px 13px",
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+              }}>
+                <span style={{ display: "flex", flexShrink: 0, color: "var(--cim-fg-base, #15191d)" }}><IconInfoCircle /></span>
+                <span style={{ flex: 1, fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "20px" }}>
+                  Need more than 10% discount ? Use price override
+                </span>
+                <Button
+                  variant="tertiary"
+                  size="medium"
+                  onPress={() => setIsPriceOverrideOpen(true)}
+                >
+                  Create price override
+                </Button>
+              </div>
 
             </div>
           </div>
 
         </div>
+
+        {/* Remove Accessories Confirmation Modal */}
+        {isRemoveAccessoriesConfirmOpen && (
+          <ModalDialog
+            title="Remove accessories"
+            size="small"
+            isOpen
+            onOpenChange={(open) => { if (!open) setIsRemoveAccessoriesConfirmOpen(false); }}
+          >
+            <ModalDialogBody>
+              <p style={{ margin: 0, fontSize: "1rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>
+                Are you sure you want to remove all {addedAccessories.length} accessory item{addedAccessories.length !== 1 ? "s" : ""} from this order?
+              </p>
+            </ModalDialogBody>
+            <ModalDialogActions>
+              <Button variant="secondary" onPress={() => setIsRemoveAccessoriesConfirmOpen(false)}>Cancel</Button>
+              <Button
+                tone="critical"
+                onPress={() => {
+                  setAddedAccessories([]);
+                  setIsAccessoriesExpanded(false);
+                  setIsRemoveAccessoriesConfirmOpen(false);
+                }}
+              >
+                Remove accessories
+              </Button>
+            </ModalDialogActions>
+          </ModalDialog>
+        )}
 
         {/* Edit Applied Charges Modal */}
         {isEditChargesOpen && (() => {
@@ -2219,127 +1852,141 @@ const handleSubmit = useCallback(() => {
             <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "64px" }}>
               <div style={{ background: "white", borderRadius: "8px", width: "min(100%, 864px)", maxHeight: "calc(100vh - 128px)", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0px 2px 8px rgba(0,0,0,0.12), 0px 8px 16px rgba(0,0,0,0.11), 0px 16px 24px rgba(0,0,0,0.10), 0px 16px 32px rgba(0,0,0,0.09), 0px 24px 48px rgba(0,0,0,0.08)" }}>
                 {/* Header */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "24px 24px 16px", borderBottom: "1px solid var(--cim-border-base, #dadcdd)" }}>
-                  <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>Price override</span>
-                  <button onClick={() => setIsPriceOverrideOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cim-fg-base, #15191d)", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, width: "32px", height: "32px", borderRadius: "4px" }}>
-                    <IconCloseBold size={16} />
-                  </button>
+                <div style={{ borderBottom: "1px solid var(--cim-border-base, #dadcdd)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px 16px" }}>
+                    <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>Apply price override</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <button
+                        onClick={() => { setPriceOverrideUnitPrice(""); setPriceOverrideItemPriceInput(""); setPriceOverrideReason(""); setPriceOverrideAccessoryPrices({}); setPriceOverrideAccessoryItemPrices({}); setPriceOverrideChargePrices({}); }}
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", padding: 0 }}
+                      >
+                        Clear all
+                      </button>
+                      <button onClick={() => setIsPriceOverrideOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cim-fg-base, #15191d)", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, width: "32px", height: "32px", borderRadius: "4px" }}>
+                        <IconCloseBold size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  {/* Amber warning — only shown when a discount is currently active */}
+                  {(pctBasedInput || savedOfferDiscountPct > 0) && (
+                    <div style={{ padding: "0 24px 16px" }}>
+                      <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-warning, #a15e0c)", lineHeight: "20px" }}>
+                        Price override will remove any previous discounts and require a approval workflow
+                      </span>
+                    </div>
+                  )}
                 </div>
                 {/* Body */}
-                <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "0 16px" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "24px", padding: "16px 0" }}>
-                    {/* Product row */}
-                    <div style={{ display: "flex", gap: "24px", alignItems: "flex-start", padding: "16px" }}>
-                      <div style={{ width: "150px", height: "150px", borderRadius: "6px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0, border: "1.3px solid var(--cim-border-base, #dadcdd)" }}>
-                        {product.imageUrl && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={product.imageUrl} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        )}
-                      </div>
-                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
-                        <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{product.name}</p>
-                        <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                          {basePrice.toFixed(2)} USD ({quantity} qty × {unitPrice.toFixed(2)}/unit)
-                        </p>
-                        {/* Fields */}
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto 1fr 1fr", gap: "8px", alignItems: "end", marginTop: "24px", minWidth: 0 }}>
-                          <div style={{ minWidth: 0, overflow: "hidden" }}>
-                            <TextField
-                              label="Quantity"
-                              value={priceOverrideQty}
-                              onChange={(val) => setPriceOverrideQty(val)}
-                              type="number"
-                            />
+                <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "0 24px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "16px 0" }}>
+
+                    {/* ── Main item card ── */}
+                    {(() => {
+                      const itemPrice = overrideValid ? modalNewBase : basePrice;
+                      const itemDiscount = overrideValid ? Math.max(0, modalDiscount) : 0;
+                      return (
+                        <div style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", padding: "16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span style={{ fontWeight: 600, fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>{product.name}</span>
+                              <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>(Main item)</span>
+                            </div>
+                            <button onClick={() => { setPriceOverrideUnitPrice(""); setPriceOverrideItemPriceInput(""); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", padding: 0 }}>Clear</button>
                           </div>
-                          <div style={{ minWidth: 0, overflow: "hidden" }}>
-                            <TextField
-                              label="Unit price"
-                              value={priceOverrideUnitPrice}
-                              onChange={(val) => setPriceOverrideUnitPrice(val)}
-                              type="number"
-                            />
-                          </div>
-                          <span style={eqSign}>=</span>
-                          <div style={{ minWidth: 0, overflow: "hidden" }}>
-                            <TextField
-                              label="Packaged price"
-                              value={modalNewBase.toFixed(2)}
-                              suffix="USD"
-                              isReadOnly
-                            />
-                          </div>
-                          <div style={{ minWidth: 0, overflow: "hidden" }}>
-                            <TextField
-                              label="Discount"
-                              value={overrideValid ? Math.abs(modalDiscount).toFixed(2) : "0.00"}
-                              suffix="USD"
-                              isReadOnly
-                            />
+                          <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
+                            <div style={{ width: "64px", height: "64px", borderRadius: "4px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0, border: "1px solid var(--cim-border-base, #dadcdd)" }}>
+                              {product.imageUrl && <img src={product.imageUrl} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <p style={{ margin: "0 0 4px", fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Original price: {basePrice.toFixed(2)} USD</p>
+                              <p style={{ margin: "0 0 16px", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>({quantity} x {unitPrice.toFixed(2)}/unit)</p>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr 1fr", gap: "8px", alignItems: "end" }}>
+                                <TextField
+                                  label="Discounted unit price"
+                                  value={priceOverrideUnitPrice}
+                                  onChange={(val) => {
+                                    setPriceOverrideUnitPrice(val);
+                                    // Sync → item price
+                                    const p = parseFloat(val);
+                                    setPriceOverrideItemPriceInput(!isNaN(p) ? (p * modalQty).toFixed(2) : "");
+                                  }}
+                                  type="number"
+                                />
+                                <span style={eqSign}>=</span>
+                                <TextField
+                                  label="Discounted item price"
+                                  value={priceOverrideItemPriceInput !== "" ? priceOverrideItemPriceInput : itemPrice.toFixed(2)}
+                                  prefix="USD"
+                                  onChange={(val) => {
+                                    setPriceOverrideItemPriceInput(val);
+                                    // Sync → unit price
+                                    const p = parseFloat(val);
+                                    setPriceOverrideUnitPrice((!isNaN(p) && modalQty > 0) ? (p / modalQty).toFixed(4) : "");
+                                  }}
+                                />
+                                <TextField
+                                  label="Discount"
+                                  value={itemDiscount.toFixed(2)}
+                                  prefix="USD"
+                                  isReadOnly
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                    {/* Accessory rows */}
+                      );
+                    })()}
+
+                    {/* ── Accessory cards ── */}
                     {addedAccessories.map((acc) => {
                       const accCatalog = MOCK_ACCESSORIES.find((m) => m.id === acc.id);
                       const accInputPrice = priceOverrideAccessoryPrices[acc.id] ?? "";
-                      const accInputQty = priceOverrideAccessoryQuantities[acc.id] ?? String(acc.quantity);
                       const accParsed = accInputPrice !== "" ? parseFloat(accInputPrice) : NaN;
-                      const accQtyParsed = parseInt(accInputQty, 10);
-                      const accQty = !isNaN(accQtyParsed) && accQtyParsed > 0 ? accQtyParsed : acc.quantity;
                       const accValid = !isNaN(accParsed) && accParsed >= 0;
-                      const accOrigPackaged = parseFloat((acc.unitPrice * acc.quantity).toFixed(2)); // fixed: original qty × original unit price
-                      const accPackaged = accValid ? parseFloat((accParsed * accQty).toFixed(2)) : accOrigPackaged;
-                      const accDiscount = accValid ? parseFloat((accOrigPackaged - accPackaged).toFixed(2)) : 0;
+                      const accOrigPackaged = parseFloat((acc.unitPrice * acc.quantity).toFixed(2));
+                      const accPackaged = accValid ? parseFloat((accParsed * acc.quantity).toFixed(2)) : accOrigPackaged;
+                      const accDiscount = accValid ? Math.max(0, parseFloat((accOrigPackaged - accPackaged).toFixed(2))) : 0;
                       return (
-                        <div key={acc.id}>
-                          <div style={{ height: "1px", background: "var(--cim-border-base, #dadcdd)" }} />
-                          <div style={{ display: "flex", gap: "24px", alignItems: "flex-start", padding: "16px" }}>
-                            <div style={{ width: "150px", height: "150px", borderRadius: "6px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0, border: "1.3px solid var(--cim-border-base, #dadcdd)" }}>
-                              {accCatalog?.imageUrl && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={accCatalog.imageUrl} alt={acc.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                              )}
+                        <div key={acc.id} style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", padding: "16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span style={{ fontWeight: 600, fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>{acc.label}</span>
+                              <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>(Accessory)</span>
                             </div>
-                            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
-                              <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{acc.label}</p>
-                              <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
-                                {parseFloat((acc.unitPrice * acc.quantity).toFixed(2)).toFixed(2)} USD ({acc.quantity} qty × {acc.unitPrice.toFixed(2)}/unit)
-                              </p>
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto 1fr 1fr", gap: "8px", alignItems: "end", marginTop: "24px", minWidth: 0 }}>
-                                <div style={{ minWidth: 0, overflow: "hidden" }}>
-                                  <TextField
-                                    label="Quantity"
-                                    value={accInputQty}
-                                    onChange={(val) => setPriceOverrideAccessoryQuantities((prev) => ({ ...prev, [acc.id]: val }))}
-                                    type="number"
-                                  />
-                                </div>
-                                <div style={{ minWidth: 0, overflow: "hidden" }}>
-                                  <TextField
-                                    label="Unit price"
-                                    value={accInputPrice}
-                                    onChange={(val) => setPriceOverrideAccessoryPrices((prev) => ({ ...prev, [acc.id]: val }))}
-                                    type="number"
-                                  />
-                                </div>
+                            <button onClick={() => { setPriceOverrideAccessoryPrices((prev) => ({ ...prev, [acc.id]: "" })); setPriceOverrideAccessoryItemPrices((prev) => ({ ...prev, [acc.id]: "" })); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", padding: 0 }}>Clear</button>
+                          </div>
+                          <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
+                            <div style={{ width: "64px", height: "64px", borderRadius: "4px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0, border: "1px solid var(--cim-border-base, #dadcdd)" }}>
+                              {accCatalog?.imageUrl && <img src={accCatalog.imageUrl} alt={acc.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <p style={{ margin: "0 0 4px", fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Original price: {accOrigPackaged.toFixed(2)} USD</p>
+                              <p style={{ margin: "0 0 16px", fontSize: "0.875rem", color: "var(--cim-fg-subtle, #5f6469)" }}>({acc.quantity} x {acc.unitPrice.toFixed(2)}/unit)</p>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr 1fr", gap: "8px", alignItems: "end" }}>
+                                <TextField
+                                  label="Discounted unit price"
+                                  value={accInputPrice}
+                                  onChange={(val) => {
+                                    setPriceOverrideAccessoryPrices((prev) => ({ ...prev, [acc.id]: val }));
+                                    // Sync → item price
+                                    const p = parseFloat(val);
+                                    setPriceOverrideAccessoryItemPrices((prev) => ({ ...prev, [acc.id]: !isNaN(p) ? (p * acc.quantity).toFixed(2) : "" }));
+                                  }}
+                                  type="number"
+                                />
                                 <span style={eqSign}>=</span>
-                                <div style={{ minWidth: 0, overflow: "hidden" }}>
-                                  <TextField
-                                    label="Packaged price"
-                                    value={accPackaged.toFixed(2)}
-                                    suffix="USD"
-                                    isReadOnly
-                                  />
-                                </div>
-                                <div style={{ minWidth: 0, overflow: "hidden" }}>
-                                  <TextField
-                                    label="Discount"
-                                    value={accValid ? Math.abs(accDiscount).toFixed(2) : "0.00"}
-                                    suffix="USD"
-                                    isReadOnly
-                                  />
-                                </div>
+                                <TextField
+                                  label="Discounted item price"
+                                  value={(priceOverrideAccessoryItemPrices[acc.id] !== undefined && priceOverrideAccessoryItemPrices[acc.id] !== "") ? priceOverrideAccessoryItemPrices[acc.id] : accPackaged.toFixed(2)}
+                                  prefix="USD"
+                                  onChange={(val) => {
+                                    setPriceOverrideAccessoryItemPrices((prev) => ({ ...prev, [acc.id]: val }));
+                                    // Sync → unit price
+                                    const p = parseFloat(val);
+                                    setPriceOverrideAccessoryPrices((prev) => ({ ...prev, [acc.id]: (!isNaN(p) && acc.quantity > 0) ? (p / acc.quantity).toFixed(4) : "" }));
+                                  }}
+                                />
+                                <TextField label="Discount" value={accDiscount.toFixed(2)} prefix="USD" isReadOnly />
                               </div>
                             </div>
                           </div>
@@ -2347,13 +1994,50 @@ const handleSubmit = useCallback(() => {
                       );
                     })}
 
-                    {/* Reason */}
+                    {/* ── Extra charge cards ── */}
+                    {allExtraCharges.filter((c) => !savedWaivedChargeIds.includes(c.id)).map((charge) => {
+                      const chargeInput = priceOverrideChargePrices[charge.id] ?? "";
+                      const chargeParsed = chargeInput !== "" ? parseFloat(chargeInput) : NaN;
+                      const chargeValid = !isNaN(chargeParsed) && chargeParsed >= 0;
+                      const chargeDiscount = chargeValid ? Math.max(0, parseFloat((charge.unitPrice - chargeParsed).toFixed(2))) : 0;
+                      return (
+                        <div key={charge.id} style={{ border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", padding: "16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span style={{ fontWeight: 600, fontSize: "1rem", color: "var(--cim-fg-base, #15191d)" }}>{charge.label}</span>
+                              <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>(Extra charges)</span>
+                            </div>
+                            <button onClick={() => setPriceOverrideChargePrices((prev) => ({ ...prev, [charge.id]: "" }))} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.875rem", color: "var(--cim-fg-accent, #007798)", textDecoration: "underline", padding: 0 }}>Clear</button>
+                          </div>
+                          <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
+                            <div style={{ width: "64px", height: "64px", borderRadius: "4px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)", flexShrink: 0, border: "1px solid var(--cim-border-base, #dadcdd)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <span style={{ fontSize: "1.5rem" }}>🏷️</span>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <p style={{ margin: "0 0 16px", fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Original price: {charge.unitPrice.toFixed(2)} USD</p>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", alignItems: "end" }}>
+                                <TextField
+                                  label="Discounted price"
+                                  value={chargeInput}
+                                  onChange={(val) => setPriceOverrideChargePrices((prev) => ({ ...prev, [charge.id]: val }))}
+                                  prefix="USD"
+                                  type="number"
+                                />
+                                <TextField label="Discount" value={chargeDiscount.toFixed(2)} prefix="USD" isReadOnly />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* ── Reason ── */}
                     <Select
-                      label="Reason for price override"
+                      label="Select reason for offer customization"
                       isRequired
                       selectedKey={priceOverrideReason || null}
                       onSelectionChange={(key) => setPriceOverrideReason(String(key))}
-                      placeholder="Select a reason..."
+                      placeholder="Select an item"
                     >
                       <SelectItem id="customer-loyalty">Customer loyalty discount</SelectItem>
                       <SelectItem id="volume-discount">Volume discount</SelectItem>
@@ -2362,66 +2046,144 @@ const handleSubmit = useCallback(() => {
                       <SelectItem id="executive-approval">Executive approval</SelectItem>
                       <SelectItem id="error-correction">Error correction</SelectItem>
                     </Select>
-                    {/* Warning banner — only when discount > 15% of original total */}
-                    {overrideValid && modalDiscount > 0 && (modalDiscount / modalOrigBase) > 0.15 && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px", border: "1px solid #f59e0b", borderRadius: "6px", padding: "12px 16px" }}>
-                        <span style={{ color: "#f59e0b", fontSize: "1.125rem", flexShrink: 0 }}>⚠</span>
-                        <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>This price will require admin approval (discount exceeds 15%)</span>
-                      </div>
-                    )}
+
+                    {/* ── Internal notes ── */}
+                    {(() => {
+                      const accNotesLines = addedAccessories.map((acc) => {
+                        const accInput = priceOverrideAccessoryPrices[acc.id] ?? "";
+                        const accParsed = parseFloat(accInput);
+                        const newPkg = !isNaN(accParsed) ? (accParsed * acc.quantity).toFixed(2) : (acc.unitPrice * acc.quantity).toFixed(2);
+                        return `${acc.label}: ${acc.quantity} * $${(acc.unitPrice * acc.quantity).toFixed(2)} and New package price $${newPkg}`;
+                      });
+                      const chargeLines = allExtraCharges.filter((c) => !savedWaivedChargeIds.includes(c.id)).map((c) => {
+                        const cInput = priceOverrideChargePrices[c.id] ?? "";
+                        const cParsed = parseFloat(cInput);
+                        const newPkg = !isNaN(cParsed) ? cParsed.toFixed(2) : c.unitPrice.toFixed(2);
+                        return `${c.label}: 1 * $${c.unitPrice.toFixed(2)} and New package price $${newPkg}`;
+                      });
+                      const mainNewPkg = overrideValid ? modalNewBase.toFixed(2) : basePrice.toFixed(2);
+                      const totalOverride = parseFloat((
+                        (overrideValid ? modalNewBase : basePrice)
+                        + addedAccessories.reduce((s, acc) => {
+                          const p = parseFloat(priceOverrideAccessoryPrices[acc.id] ?? "");
+                          return s + (!isNaN(p) ? p * acc.quantity : acc.unitPrice * acc.quantity);
+                        }, 0)
+                        + allExtraCharges.filter((c) => !savedWaivedChargeIds.includes(c.id)).reduce((s, c) => {
+                          const p = parseFloat(priceOverrideChargePrices[c.id] ?? "");
+                          return s + (!isNaN(p) ? p : c.unitPrice);
+                        }, 0)
+                      ).toFixed(2));
+                      const notesText = [
+                        `Reason for price query:`,
+                        `Supervisor Approved:`,
+                        `Quote ID:`,
+                        `Main Item Qty & Package Price:`,
+                        `${quantity} * $${basePrice.toFixed(2)} and New package price $${mainNewPkg}`,
+                        ...(addedAccessories.length > 0 ? [`Accessories Qty & Package Price:`, ...accNotesLines] : []),
+                        ...(chargeLines.length > 0 ? [`Fixed Charges:`, ...chargeLines] : []),
+                        `Shipping:`,
+                        `Item Total (excluding shipping and tax):`,
+                        `${totalOverride.toFixed(2)} USD`,
+                      ].join("\n");
+                      return (
+                        <Disclosure title="Internal notes">
+                          <pre style={{ margin: "0", fontSize: "0.8125rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "20px", whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+                            {notesText}
+                          </pre>
+                        </Disclosure>
+                      );
+                    })()}
+
                   </div>
                 </div>
                 {/* Footer */}
-                <div style={{ borderTop: "1px solid var(--cim-border-base, #dadcdd)", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                    <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-muted, #94979b)" }}>new item total</span>
-                    {hasModalCustomization ? (
-                      <>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-                          <span style={{ fontSize: "1rem", color: "var(--cim-fg-subtle, #5f6469)", textDecoration: "line-through" }}>{basePrice.toFixed(2)} USD</span>
-                          <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{modalNewBase.toFixed(2)} USD</span>
+                {(() => {
+                  const footerNew = parseFloat((
+                    (overrideValid ? modalNewBase : basePrice)
+                    + addedAccessories.reduce((s, acc) => {
+                      const p = parseFloat(priceOverrideAccessoryPrices[acc.id] ?? "");
+                      return s + (!isNaN(p) ? p * acc.quantity : acc.unitPrice * acc.quantity);
+                    }, 0)
+                    + allExtraCharges.filter((c) => !savedWaivedChargeIds.includes(c.id)).reduce((s, c) => {
+                      const p = parseFloat(priceOverrideChargePrices[c.id] ?? "");
+                      return s + (!isNaN(p) ? p : c.unitPrice);
+                    }, 0)
+                  ).toFixed(2));
+                  // Always compare against TRUE catalog prices — not previously-saved overrides or pct discounts
+                  const footerOrig = parseFloat((
+                    unitPrice * quantity
+                    + addedAccessories.reduce((s, a) => s + a.unitPrice * a.quantity, 0)
+                    + allExtraCharges.filter((c) => !savedWaivedChargeIds.includes(c.id)).reduce((s, c) => s + c.unitPrice, 0)
+                  ).toFixed(2));
+                  const footerDiscount = parseFloat((footerOrig - footerNew).toFixed(2));
+                  const canConfirm = overrideValid && priceOverrideReason.trim();
+                  return (
+                    <div style={{ borderTop: "1px solid var(--cim-border-base, #dadcdd)", padding: "16px 24px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                            <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{footerNew.toFixed(2)} USD</span>
+                            <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>(Exc tax)</span>
+                          </div>
+                          {footerDiscount > 0 && (
+                            <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-success, #007e3f)" }}>Total discount of {footerDiscount.toFixed(2)} USD</span>
+                          )}
                         </div>
-                        {modalDiscount !== 0 && (
-                          <span style={{ fontSize: "0.75rem", color: modalDiscount > 0 ? "var(--cim-fg-success, #007e3f)" : "var(--cim-fg-critical, #d10023)" }}>
-                            {modalDiscount > 0 ? `${modalDiscount.toFixed(2)} USD in savings` : `${Math.abs(modalDiscount).toFixed(2)} USD price increase`}
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <span style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--cim-fg-muted, #94979b)" }}>0.00 USD</span>
-                        <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-muted, #94979b)" }}>No price customization selected</span>
-                      </>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", gap: "16px", flexShrink: 0 }}>
-                    <Button variant="secondary" onPress={() => setIsPriceOverrideOpen(false)}>Cancel</Button>
-                    <Button
-                      isDisabled={!overrideValid || !priceOverrideReason.trim()}
-                      onPress={() => {
-                        setSavedPriceOverrideUnitPrice(overrideParsed);
-                        // Save accessory override prices
-                        const newAccPrices: Record<string, number> = {};
-                        addedAccessories.forEach((a) => {
-                          const p = parseFloat(priceOverrideAccessoryPrices[a.id] ?? "");
-                          if (!isNaN(p) && p >= 0) newAccPrices[a.id] = p;
-                        });
-                        setSavedAccessoryOverridePrices(newAccPrices);
-                        // Clear pct/new-price discount when price override is confirmed
-                        setSavedOfferDiscountPct(0);
-                        setOfferDiscountPct(0);
-                        setPctBasedInput("");
-                        setNewPriceInput("");
-                        setNewUnitPriceInput("");
-                        setSavedNewPriceInput("");
-                        setOverrideReason("");
-                        setIsPriceOverrideOpen(false);
-                      }}
-                    >
-                      Confirm
-                    </Button>
-                  </div>
-                </div>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
+                          <div style={{ display: "flex", gap: "12px" }}>
+                            <Button variant="secondary" onPress={() => setIsPriceOverrideOpen(false)}>Cancel</Button>
+                            <Button
+                              variant="primary"
+                              isDisabled={!canConfirm}
+                              onPress={() => {
+                                setSavedPriceOverrideUnitPrice(overrideParsed);
+                                const newAccPrices: Record<string, number> = {};
+                                addedAccessories.forEach((a) => {
+                                  const p = parseFloat(priceOverrideAccessoryPrices[a.id] ?? "");
+                                  if (!isNaN(p) && p >= 0) newAccPrices[a.id] = p;
+                                });
+                                setSavedAccessoryOverridePrices(newAccPrices);
+                                setSavedOfferDiscountPct(0);
+                                setOfferDiscountPct(0);
+                                setPctBasedInput("");
+                                setNewPriceInput("");
+                                setNewUnitPriceInput("");
+                                setSavedNewPriceInput("");
+                                setOverrideReason("");
+                                setIsPriceOverrideOpen(false);
+                                // Copy internal notes to clipboard
+                                const mainNewPkg = overrideValid ? modalNewBase.toFixed(2) : basePrice.toFixed(2);
+                                const notes = [
+                                  `Reason for price query:`,
+                                  `Supervisor Approved:`,
+                                  `Quote ID:`,
+                                  `Main Item Qty & Package Price:`,
+                                  `${quantity} * $${basePrice.toFixed(2)} and New package price $${mainNewPkg}`,
+                                  ...addedAccessories.map((acc) => {
+                                    const p = parseFloat(priceOverrideAccessoryPrices[acc.id] ?? "");
+                                    const newPkg = !isNaN(p) ? (p * acc.quantity).toFixed(2) : (acc.unitPrice * acc.quantity).toFixed(2);
+                                    return `${acc.label}: ${acc.quantity} * $${(acc.unitPrice * acc.quantity).toFixed(2)} and New package price $${newPkg}`;
+                                  }),
+                                  ...allExtraCharges.filter((c) => !savedWaivedChargeIds.includes(c.id)).map((c) => {
+                                    const p = parseFloat(priceOverrideChargePrices[c.id] ?? "");
+                                    return `${c.label}: 1 * $${c.unitPrice.toFixed(2)} and New package price $${!isNaN(p) ? p.toFixed(2) : c.unitPrice.toFixed(2)}`;
+                                  }),
+                                  `Shipping:`,
+                                  `Item Total (excluding shipping and tax):`,
+                                  `${footerNew.toFixed(2)} USD`,
+                                ].join("\n");
+                                navigator.clipboard?.writeText(notes).catch(() => {});
+                              }}
+                            >
+                              Confirm discount
+                            </Button>
+                          </div>
+                          <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>Confirming will copy the notes to your clipboard</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           );

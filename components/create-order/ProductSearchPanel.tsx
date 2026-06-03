@@ -17,6 +17,9 @@ interface ProductSearchPanelProps {
   onQuantityChange: (draftItemId: string, newQty: number) => void;
   onSizeQuantityChange?: (draftItemId: string, size: string, newQty: number) => void;
   onAccessoryRemove: (draftItemId: string, accessoryId: string) => void;
+  onAddAccessory?: (draftItemId: string, acc: import("@/lib/types").DraftOrderItemAccessory) => void;
+  onEditPriceOverride?: (draftItemId: string) => void;
+  onItemLineTotalUpdate?: (draftItemId: string, newLineTotal: number) => void;
   editingItem: DraftOrderItem | null;
 }
 
@@ -40,6 +43,9 @@ export function ProductSearchPanel({
   onQuantityChange,
   onSizeQuantityChange,
   onAccessoryRemove,
+  onAddAccessory,
+  onEditPriceOverride,
+  onItemLineTotalUpdate,
   editingItem,
 }: ProductSearchPanelProps) {
   const [searchQuery, setSearchQuery] = useState(editingItem ? editingItem.product.name : "");
@@ -155,6 +161,9 @@ export function ProductSearchPanel({
           onQuantityChange={onQuantityChange}
           onSizeQuantityChange={onSizeQuantityChange}
           onAccessoryRemove={onAccessoryRemove}
+          onAddAccessory={onAddAccessory}
+          onEditPriceOverride={onEditPriceOverride}
+          onItemLineTotalUpdate={onItemLineTotalUpdate}
         />
       )}
     </div>

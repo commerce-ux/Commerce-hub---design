@@ -96,149 +96,97 @@ export function AccessoryCard({ item, onAdd, isAdded = false, onRemove, mainItem
   const itemTotal = qty * item.unitPrice;
 
   return (
-    <div style={{
-      background: "white",
-      border: "1px solid var(--cim-border-base, #dadcdd)",
-      borderRadius: "8px",
-      overflow: "hidden",
-      display: "flex",
-      flexDirection: "column",
-      boxShadow: "0px 1px 1px 0px rgba(0,0,0,0.08), 0px 1px 3px 0px rgba(0,0,0,0.04)",
-    }}>
-      {/* Card header */}
-      <div style={{ padding: "12px 8px", height: "64px", display: "flex", flexDirection: "column", gap: "4px", justifyContent: "center" }}>
-        <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px", border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "6px", padding: "12px" }}>
+      {/* Name + ID */}
+      <div>
+        <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>
           {item.name}
-        </span>
-        <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)", lineHeight: "16px" }}>
-          Item ID {item.itemId}
-        </span>
+        </p>
+        <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)", lineHeight: "16px" }}>
+          {item.itemId}
+        </p>
       </div>
 
-      {/* Image */}
-      <div style={{
-        height: "120px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-        background: "white",
-      }}>
+      {/* Image — full width, centered */}
+      <div style={{ width: "100%", height: "120px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "6px", overflow: "hidden", background: "var(--cim-bg-subtle, #f8f9fa)" }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={item.imageUrl}
-          alt={item.name}
-          style={{ height: "100px", width: "auto", objectFit: "contain" }}
+        <img src={item.imageUrl} alt={item.name} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+      </div>
+
+      {/* Quantity input */}
+      <div style={{ background: "white", border: "1px solid var(--cim-border-base, #dadcdd)", borderRadius: "var(--cim-radius-4, 4px)", minHeight: "40px", display: "flex", alignItems: "center", padding: "0 4px 0 12px", gap: "4px" }}>
+        <input
+          type="number"
+          value={qty === 0 ? "" : qty}
+          placeholder="0"
+          onChange={(e) => {
+            const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+            setQty(Math.min(val, effectiveMax));
+          }}
+          style={{ flex: 1, border: "none", outline: "none", fontSize: "1rem", color: qty > 0 ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-subtle, #5f6469)", background: "transparent", MozAppearance: "textfield" } as React.CSSProperties}
         />
       </div>
 
-      {/* Divider */}
-      <div style={{ height: "1px", background: "var(--cim-border-subtle, #eaebeb)" }} />
-
-      {/* Pricing section */}
-      <div style={{
-        padding: "8px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "16px",
-        borderTop: "1px solid var(--cim-border-base, #dadcdd)",
-        background: "white",
-      }}>
-        {/* Quantity input */}
-        <div style={{
-          background: "white",
-          border: "1px solid var(--cim-border-base, #dadcdd)",
-          borderRadius: "4px",
-          minHeight: "40px",
-          display: "flex",
-          alignItems: "center",
-          padding: "0 12px",
-        }}>
-          <input
-            type="number"
-            min={0}
-            max={effectiveMax}
-            value={qty === 0 ? "" : qty}
-            placeholder="0"
-            onChange={(e) => {
-              const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-              setQty(Math.min(val, effectiveMax));
-            }}
-            style={{
-              width: "100%",
-              border: "none",
-              outline: "none",
-              fontSize: "1rem",
-              color: qty > 0 ? "var(--cim-fg-base, #15191d)" : "var(--cim-fg-subtle, #5f6469)",
-              background: "transparent",
-              MozAppearance: "textfield",
-            } as React.CSSProperties}
-          />
+      {/* Unit price (right-aligned) + Item Total row */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+        <div style={{ textAlign: "right", fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)" }}>
+          {item.unitPrice.toFixed(2)} USD /unit
         </div>
-
-        {/* Item total row */}
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
-          <span style={{ fontSize: "1rem", color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>
-            Item Total
-          </span>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "1px" }}>
-            <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-subtle, #5f6469)", lineHeight: "16px" }}>
-              USD {item.unitPrice.toFixed(2)}/unit
-            </span>
-            <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)", lineHeight: "24px" }}>
-              USD {itemTotal.toFixed(2)}
-            </span>
-          </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <span style={{ fontSize: "0.875rem", color: "var(--cim-fg-base, #15191d)" }}>Item Total</span>
+          <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--cim-fg-base, #15191d)" }}>{itemTotal.toFixed(2)} USD</span>
         </div>
-
-        {/* Add / Remove button */}
-        {isAdded ? (
-          <Button
-            tone="critical"
-            onPress={() => onRemove?.()}
-          >
-            Remove
-          </Button>
-        ) : (
-          <Button
-            variant="secondary"
-            onPress={() => onAdd({ id: item.id, label: item.name, quantity: qty, unitPrice: item.unitPrice })}
-          >
-            Add to item
-          </Button>
-        )}
       </div>
+
+      {/* Add / Remove button — full width */}
+      {isAdded ? (
+        <Button tone="critical" onPress={() => onRemove?.()}>Remove</Button>
+      ) : (
+        <Button variant="secondary" onPress={() => onAdd({ id: item.id, label: item.name, quantity: qty, unitPrice: item.unitPrice })}>
+          Add to item
+        </Button>
+      )}
     </div>
   );
 }
 
 interface AddAccessoryModalProps {
   onAdd: (acc: DraftOrderItemAccessory) => void;
+  onRemove?: (accessoryId: string) => void;
   onCancel: () => void;
+  existingAccessories?: DraftOrderItemAccessory[];
+  mainItemQty?: number;
 }
 
-export function AddAccessoryModal({ onAdd, onCancel }: AddAccessoryModalProps) {
+export function AddAccessoryModal({ onAdd, onRemove, onCancel, existingAccessories = [], mainItemQty = 0 }: AddAccessoryModalProps) {
+  const addedCount = existingAccessories.length;
   return (
     <ModalDialog
-      title="Add accessory"
+      title={`Add Accessory${addedCount > 0 ? ` (${addedCount})` : ""}`}
       size="large"
       isOpen
       onOpenChange={(open) => { if (!open) onCancel(); }}
       isDismissible
     >
       <ModalDialogBody>
-        <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
-          {MOCK_ACCESSORIES.map((acc) => (
-            <AccessoryCard
-              key={acc.id}
-              item={acc}
-              onAdd={(added) => { onAdd(added); onCancel(); }}
-            />
-          ))}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+          {MOCK_ACCESSORIES.map((acc) => {
+            const existing = existingAccessories.find((e) => e.id === acc.id);
+            return (
+              <AccessoryCard
+                key={acc.id}
+                item={acc}
+                isAdded={Boolean(existing)}
+                mainItemQty={mainItemQty}
+                onAdd={(added) => onAdd(added)}
+                onRemove={existing ? () => onRemove?.(acc.id) : undefined}
+              />
+            );
+          })}
         </div>
       </ModalDialogBody>
       <ModalDialogActions>
-        <Button variant="secondary" onPress={onCancel}>Cancel</Button>
+        <Button variant="secondary" onPress={onCancel}>Close</Button>
       </ModalDialogActions>
     </ModalDialog>
   );

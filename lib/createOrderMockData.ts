@@ -18,6 +18,7 @@ function jacketDataUri(hexColor: string): string {
 // ─── Customer Database ────────────────────────────────────────────────────────
 export interface CustomerAddress {
   id: string;
+  addressType: "billing" | "shipping";
   address: string;
   city: string;
   state: string;
@@ -36,6 +37,8 @@ export interface Customer {
   orderIds: string[];
   shopperId: string;
   addresses: CustomerAddress[];
+  cartCount?: number;
+  quotesCount?: number;
 }
 
 /** Sum of orders across all addresses for a customer. */
@@ -53,9 +56,11 @@ export const CUSTOMER_DATABASE: Customer[] = [
     type: "org",
     orderIds: ["VP_LPHSW5Q", "VP_KJH23NM", "VP_QAZ11WS"],
     shopperId: "134266324230942309804284080248",
+    cartCount: 2,
+    quotesCount: 4,
     addresses: [
-      { id: "addr-001-a", address: "275 Wyman Street", city: "Waltham", state: "MA", zipcode: "02451", country: "US", orderCount: 3 },
-      { id: "addr-001-b", address: "400 Trade Center Dr", city: "Woburn", state: "MA", zipcode: "01801", country: "US", orderCount: 0 },
+      { id: "addr-001-a", addressType: "billing",  address: "One Earlsfort Terrace",  city: "Dublin",  state: "Leinster", zipcode: "D02 CK83", country: "IE", orderCount: 3 },
+      { id: "addr-001-b", addressType: "shipping", address: "25 Sir John Rogerson's Quay", city: "Dublin", state: "Leinster", zipcode: "D02 V584", country: "IE", orderCount: 0 },
     ],
   },
   {
@@ -67,8 +72,11 @@ export const CUSTOMER_DATABASE: Customer[] = [
     type: "child",
     orderIds: ["VP_QRX89PT", "VP_MNL45KJ"],
     shopperId: "234566324230942309804284080249",
+    cartCount: 1,
+    quotesCount: 1,
     addresses: [
-      { id: "addr-002-a", address: "100 Elm Street", city: "Somerville", state: "MA", zipcode: "02143", country: "US", orderCount: 2 },
+      { id: "addr-002-a", addressType: "billing",  address: "100 Elm Street",      city: "Somerville", state: "MA", zipcode: "02143", country: "US", orderCount: 2 },
+      { id: "addr-002-b", addressType: "shipping", address: "200 Boylston Street", city: "Boston",     state: "MA", zipcode: "02116", country: "US", orderCount: 0 },
     ],
   },
   {
@@ -80,9 +88,11 @@ export const CUSTOMER_DATABASE: Customer[] = [
     type: "child",
     orderIds: ["VP_WXY12AB", "VP_ZPQ67RS"],
     shopperId: "334566324230942309804284080250",
+    cartCount: 3,
+    quotesCount: 2,
     addresses: [
-      { id: "addr-003-a", address: "One Harbourmaster Place", city: "Dublin", state: "Leinster", zipcode: "D01 F6F0", country: "IE", orderCount: 2 },
-      { id: "addr-003-b", address: "4 Lapps Quay", city: "Cork", state: "Munster", zipcode: "T12 X44J", country: "IE", orderCount: 0 },
+      { id: "addr-003-a", addressType: "billing",  address: "One Harbourmaster Place", city: "Dublin", state: "Leinster", zipcode: "D01 F6F0", country: "IE", orderCount: 2 },
+      { id: "addr-003-b", addressType: "shipping", address: "4 Lapps Quay",            city: "Cork",   state: "Munster",  zipcode: "T12 X44J", country: "IE", orderCount: 0 },
     ],
   },
   {
@@ -94,9 +104,11 @@ export const CUSTOMER_DATABASE: Customer[] = [
     type: "org",
     orderIds: ["VP_BCD34EF", "VP_GHI78JK"],
     shopperId: "434566324230942309804284080251",
+    cartCount: 0,
+    quotesCount: 0,
     addresses: [
-      { id: "addr-004-a", address: "42 MG Road", city: "Bengaluru", state: "Karnataka", zipcode: "560001", country: "IN", orderCount: 1 },
-      { id: "addr-004-b", address: "15 BKC, Bandra", city: "Mumbai", state: "Maharashtra", zipcode: "400051", country: "IN", orderCount: 1 },
+      { id: "addr-004-a", addressType: "billing",  address: "42 MG Road",       city: "Bengaluru", state: "Karnataka",   zipcode: "560001", country: "IN", orderCount: 1 },
+      { id: "addr-004-b", addressType: "shipping", address: "15 BKC, Bandra", city: "Mumbai",    state: "Maharashtra", zipcode: "400051", country: "IN", orderCount: 1 },
     ],
   },
   {
@@ -108,8 +120,11 @@ export const CUSTOMER_DATABASE: Customer[] = [
     type: "child",
     orderIds: ["VP_LMN90OP"],
     shopperId: "534566324230942309804284080252",
+    cartCount: 1,
+    quotesCount: 3,
     addresses: [
-      { id: "addr-005-a", address: "Sheikh Zayed Road 12", city: "Dubai", state: "Dubai", zipcode: "00000", country: "AE", orderCount: 1 },
+      { id: "addr-005-a", addressType: "billing",  address: "Sheikh Zayed Road 12",   city: "Dubai",     state: "Dubai",     zipcode: "00000", country: "AE", orderCount: 1 },
+      { id: "addr-005-b", addressType: "shipping", address: "Al Makhtoum Road 55", city: "Dubai",     state: "Dubai",     zipcode: "00001", country: "AE", orderCount: 0 },
     ],
   },
   {
@@ -121,9 +136,11 @@ export const CUSTOMER_DATABASE: Customer[] = [
     type: "org",
     orderIds: ["VP_QRS12TU", "VP_VWX34YZ", "VP_ABC56DE"],
     shopperId: "634566324230942309804284080253",
+    cartCount: 4,
+    quotesCount: 7,
     addresses: [
-      { id: "addr-006-a", address: "88 Collins Street", city: "Melbourne", state: "VIC", zipcode: "3000", country: "AU", orderCount: 2 },
-      { id: "addr-006-b", address: "48 Hunter Street, Level 5", city: "Sydney", state: "NSW", zipcode: "2000", country: "AU", orderCount: 1 },
+      { id: "addr-006-a", addressType: "billing",  address: "88 Collins Street",         city: "Melbourne", state: "VIC", zipcode: "3000", country: "AU", orderCount: 2 },
+      { id: "addr-006-b", addressType: "shipping", address: "48 Hunter Street, Level 5", city: "Sydney",    state: "NSW", zipcode: "2000", country: "AU", orderCount: 1 },
     ],
   },
   {
@@ -135,8 +152,11 @@ export const CUSTOMER_DATABASE: Customer[] = [
     type: "child",
     orderIds: ["VP_FGH78IJ"],
     shopperId: "734566324230942309804284080254",
+    cartCount: 0,
+    quotesCount: 1,
     addresses: [
-      { id: "addr-007-a", address: "500 W Madison St", city: "Chicago", state: "IL", zipcode: "60661", country: "US", orderCount: 1 },
+      { id: "addr-007-a", addressType: "billing",  address: "500 W Madison St",    city: "Chicago", state: "IL", zipcode: "60661", country: "US", orderCount: 1 },
+      { id: "addr-007-b", addressType: "shipping", address: "233 S Wacker Drive", city: "Chicago", state: "IL", zipcode: "60606", country: "US", orderCount: 0 },
     ],
   },
   {
@@ -148,9 +168,11 @@ export const CUSTOMER_DATABASE: Customer[] = [
     type: "org",
     orderIds: ["VP_KLM90NO", "VP_PQR12ST"],
     shopperId: "834566324230942309804284080255",
+    cartCount: 2,
+    quotesCount: 5,
     addresses: [
-      { id: "addr-008-a", address: "Av. Insurgentes Sur 1234", city: "Mexico City", state: "CDMX", zipcode: "03100", country: "MX", orderCount: 2 },
-      { id: "addr-008-b", address: "Av. López Mateos 456", city: "Guadalajara", state: "Jalisco", zipcode: "44600", country: "MX", orderCount: 0 },
+      { id: "addr-008-a", addressType: "billing",  address: "Av. Insurgentes Sur 1234", city: "Mexico City",  state: "CDMX",    zipcode: "03100", country: "MX", orderCount: 2 },
+      { id: "addr-008-b", addressType: "shipping", address: "Av. López Mateos 456",     city: "Guadalajara", state: "Jalisco", zipcode: "44600", country: "MX", orderCount: 0 },
     ],
   },
   {
@@ -162,8 +184,11 @@ export const CUSTOMER_DATABASE: Customer[] = [
     type: "child",
     orderIds: ["VP_UVW34XY"],
     shopperId: "934566324230942309804284080256",
+    cartCount: 1,
+    quotesCount: 2,
     addresses: [
-      { id: "addr-009-a", address: "Plot 17, Cyber City", city: "Hyderabad", state: "Telangana", zipcode: "500081", country: "IN", orderCount: 1 },
+      { id: "addr-009-a", addressType: "billing",  address: "Plot 17, Cyber City",    city: "Hyderabad", state: "Telangana", zipcode: "500081", country: "IN", orderCount: 1 },
+      { id: "addr-009-b", addressType: "shipping", address: "8-2-618 Road No. 12", city: "Hyderabad", state: "Telangana", zipcode: "500034", country: "IN", orderCount: 0 },
     ],
   },
   {
@@ -175,9 +200,11 @@ export const CUSTOMER_DATABASE: Customer[] = [
     type: "child",
     orderIds: ["VP_ZAB56CD", "VP_EFG78HI"],
     shopperId: "104566324230942309804284080257",
+    cartCount: 0,
+    quotesCount: 0,
     addresses: [
-      { id: "addr-010-a", address: "Vesterbrogade 149", city: "Copenhagen", state: "Capital Region", zipcode: "1620", country: "DK", orderCount: 1 },
-      { id: "addr-010-b", address: "Skolegade 1", city: "Aarhus", state: "Midtjylland", zipcode: "8000", country: "DK", orderCount: 1 },
+      { id: "addr-010-a", addressType: "billing",  address: "Vesterbrogade 149", city: "Copenhagen", state: "Capital Region", zipcode: "1620", country: "DK", orderCount: 1 },
+      { id: "addr-010-b", addressType: "shipping", address: "Skolegade 1",        city: "Aarhus",     state: "Midtjylland",   zipcode: "8000", country: "DK", orderCount: 1 },
     ],
   },
 ];
@@ -701,7 +728,7 @@ export const MOCK_PRODUCT_CATALOG: ProductCatalogItem[] = [
     id: "PRD-5678ZPL",
     name: "Standard Ball Pens",
     category: "Writing instruments",
-    imageUrl: "https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=64&h=64&fit=crop",
+    imageUrl: "https://images.unsplash.com/photo-1585336261022-680e295ce3fe?w=300&h=300&fit=crop&auto=format&q=80",
     baseUnitPrice: 1.53,
     pricingTiers: [
       { minQty: 50, maxQty: 99, unitPrice: 1.59 },

@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button, SearchField, Text, PopoverRoot, Popover, CopyInline, TextArea } from "@cimpress-ui/react";
-import { IconCopy, IconCheckCircleFill } from "@cimpress-ui/react/icons";
 import { AppBreadcrumbs } from "@/components/AppBreadcrumbs";
 import { IconArrowLeft } from "@cimpress-ui/react/icons";
 import type { ProductCatalogItem, DraftOrderItem } from "@/lib/types";
@@ -17,6 +16,7 @@ interface AddNewItemViewProps {
   onAddComplete: (item: DraftOrderItem) => void;
   onCancel: () => void;
   pendingItemTotal: number;
+  autoOpenPriceOverride?: boolean;
 }
 
 function searchProducts(query: string): ProductCatalogItem[] {
@@ -55,7 +55,7 @@ const actionBtnStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function AddNewItemView({ customer, selectedStore, editingItem, onAddComplete, onCancel }: AddNewItemViewProps) {
+export function AddNewItemView({ customer, selectedStore, editingItem, onAddComplete, onCancel, autoOpenPriceOverride }: AddNewItemViewProps) {
   const isEditing = !!editingItem;
   const [query, setQuery] = useState(editingItem?.product.name ?? "");
   const [dropdownResults, setDropdownResults] = useState<ProductCatalogItem[]>([]);
@@ -65,23 +65,96 @@ export function AddNewItemView({ customer, selectedStore, editingItem, onAddComp
   const [isValid, setIsValid] = useState(isEditing);
   const [priceBreakdown, setPriceBreakdown] = useState<PriceBreakdown | null>(null);
   const [notesText, setNotesText] = useState("");
-  const [notesCopied, setNotesCopied] = useState(false);
+  const [templateApplied, setTemplateApplied] = useState(false);
+  const [templateFields, setTemplateFields] = useState({
+    reasonForPriceQuery: "",
+    supervisorApproved: "",
+    quoteId: "",
+    shipping: "",
+    // Offer customisation — auto-synced from priceBreakdown.offerCustomization
+    offerType: "",
+    offerInputLabel: "",
+    offerInput: "",
+    offerNewItemPrice: "",
+    offerDiscount: "",
+    offerReason: "",
+  });
 
-  async function handleCopyNotes() {
-    if (!notesText) return;
-    try {
-      await navigator.clipboard.writeText(notesText);
-    } catch {
-      const el = document.createElement("textarea");
-      el.value = notesText;
-      el.style.cssText = "position:fixed;top:-9999px;opacity:0;";
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand("copy");
-      document.body.removeChild(el);
+  // Auto-sync offer customisation fields from ItemConfigurationCard whenever the offer changes
+  const ocType = priceBreakdown?.offerCustomization?.type ?? null;
+  const ocInputValue = priceBreakdown?.offerCustomization?.inputValue ?? "";
+  const ocNewItemPrice = priceBreakdown?.offerCustomization?.newItemPrice ?? null;
+  const ocDiscount = priceBreakdown?.offerCustomization?.discountAmount ?? null;
+  const ocReason = priceBreakdown?.offerCustomization?.reasonLabel ?? "";
+  useEffect(() => {
+    if (!templateApplied) return;
+    const oc = priceBreakdown?.offerCustomization;
+    setTemplateFields(prev => ({
+      ...prev,
+      offerType: oc?.typeName ?? "",
+      offerInputLabel: oc?.inputLabel ?? "",
+      offerInput: oc?.inputValue ?? "",
+      offerNewItemPrice: oc?.newItemPrice != null ? `${oc.newItemPrice.toFixed(2)} USD` : "",
+      offerDiscount: oc?.discountAmount != null ? `${oc.discountAmount.toFixed(2)} USD` : "",
+      offerReason: oc?.reasonLabel ?? "",
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ocType, ocInputValue, ocNewItemPrice, ocDiscount, ocReason, templateApplied]);
+
+  function buildNotesString(): string {
+    if (!templateApplied) return notesText;
+    const lines: string[] = [];
+    lines.push("Reason for price query:");
+    if (templateFields.reasonForPriceQuery) lines.push(templateFields.reasonForPriceQuery);
+    lines.push("");
+    lines.push("Supervisor Approved:");
+    if (templateFields.supervisorApproved) lines.push(templateFields.supervisorApproved);
+    lines.push("");
+    lines.push("Quote ID:");
+    if (templateFields.quoteId) lines.push(templateFields.quoteId);
+    lines.push("");
+    if (priceBreakdown && priceBreakdown.quantity > 0) {
+      lines.push("Main Item Qty & Package Price:");
+      lines.push(`${priceBreakdown.quantity} * $${priceBreakdown.unitPrice.toFixed(2)} and New package price $${priceBreakdown.basePrice.toFixed(2)}`);
+      lines.push("");
     }
-    setNotesCopied(true);
-    setTimeout(() => setNotesCopied(false), 2000);
+    if (priceBreakdown && priceBreakdown.accessories.length > 0) {
+      lines.push("Accessories Qty & Package Price:");
+      priceBreakdown.accessories.forEach((acc) => {
+        lines.push(`${acc.label}: ${acc.quantity} * $${acc.unitPrice.toFixed(2)} and New package price $${(acc.quantity * acc.unitPrice).toFixed(2)}`);
+      });
+      lines.push("");
+    }
+    if (priceBreakdown && priceBreakdown.charges.length > 0) {
+      lines.push("Fixed Charges:");
+      priceBreakdown.charges.forEach((c) => {
+        lines.push(`${c.label}: 1 * $${c.price.toFixed(2)} and New package price $${c.price.toFixed(2)}`);
+      });
+      lines.push("");
+    }
+    if (templateFields.offerType) {
+      lines.push("Offer Customisation:");
+      lines.push(`Offer type: ${templateFields.offerType}`);
+      if (templateFields.offerInputLabel && templateFields.offerInput) {
+        lines.push(`${templateFields.offerInputLabel}: ${templateFields.offerInput}`);
+      }
+      if (templateFields.offerNewItemPrice) lines.push(`New item price: ${templateFields.offerNewItemPrice}`);
+      if (templateFields.offerDiscount) lines.push(`Discount: ${templateFields.offerDiscount}`);
+      if (templateFields.offerReason) lines.push(`Reason: ${templateFields.offerReason}`);
+      lines.push("");
+    }
+    lines.push("Shipping:");
+    if (templateFields.shipping) lines.push(templateFields.shipping);
+    lines.push("");
+    if (priceBreakdown) {
+      lines.push("Item Total (excluding shipping and tax):");
+      lines.push(`${priceBreakdown.subtotal.toFixed(2)} USD`);
+    }
+    return lines.join("\n");
+  }
+
+  function handleAddComplete(item: import("@/lib/types").DraftOrderItem) {
+    onAddComplete({ ...item, internalNotes: buildNotesString() || undefined });
   }
 
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -258,10 +331,11 @@ export function AddNewItemView({ customer, selectedStore, editingItem, onAddComp
                 ref={cardRef}
                 product={selectedProduct}
                 initialValues={editingItem?.product.id === selectedProduct.id ? editingItem : undefined}
-                onAddToOrder={onAddComplete}
+                onAddToOrder={handleAddComplete}
                 onLineTotalChange={setItemTotal}
                 onValidityChange={setIsValid}
                 onPriceBreakdownChange={setPriceBreakdown}
+                autoOpenPriceOverride={autoOpenPriceOverride}
               />
             )}
           </div>
@@ -279,35 +353,89 @@ export function AddNewItemView({ customer, selectedStore, editingItem, onAddComp
             padding: "16px",
             display: "flex",
             flexDirection: "column",
-            gap: "12px",
+            gap: "16px",
+            maxHeight: "calc(100vh - 80px)",
+            overflowY: "auto",
           }}>
             {/* Header row */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-              <Text as="h2" variant="title-5">Internal notes</Text>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "1rem", fontWeight: 400, lineHeight: "24px", color: "var(--cim-fg-base, #15191d)" }}>Internal notes</span>
               <button
-                onClick={handleCopyNotes}
-                disabled={!notesText}
-                aria-label="Copy notes"
+                onClick={templateApplied ? () => { setTemplateApplied(false); setTemplateFields({ reasonForPriceQuery: "", supervisorApproved: "", quoteId: "", shipping: "", offerType: "", offerInputLabel: "", offerInput: "", offerNewItemPrice: "", offerDiscount: "", offerReason: "" }); } : () => setTemplateApplied(true)}
                 style={{
-                  display: "flex", alignItems: "center", gap: "6px",
-                  background: "none", border: "none", cursor: notesText ? "pointer" : "default",
-                  padding: "4px 8px", borderRadius: "4px",
-                  fontSize: "0.875rem", color: notesCopied ? "var(--cim-fg-success, #007e3f)" : "var(--cim-fg-accent, #007798)",
-                  opacity: notesText ? 1 : 0.4,
+                  background: "none", border: "none", cursor: "pointer", padding: 0,
+                  fontSize: "0.875rem", lineHeight: "20px",
+                  color: "var(--cim-fg-accent, #007798)",
+                  textDecoration: "underline",
+                  textDecorationThickness: "1.5px",
+                  textUnderlineOffset: "2px",
                 }}
               >
-                {notesCopied ? <IconCheckCircleFill /> : <IconCopy />}
-                {notesCopied ? "Copied" : "Copy"}
+                {templateApplied ? "Clear template" : "Add template"}
               </button>
             </div>
 
-            {/* Notes textarea */}
-            <TextArea
-              aria-label="Internal notes"
-              value={notesText}
-              onChange={setNotesText}
-                            rows={12}
-            />
+            {/* Notes: textarea by default, structured template when applied */}
+            {templateApplied ? (() => {
+              const labelStyle: React.CSSProperties = { fontSize: "0.875rem", fontWeight: 400, lineHeight: "20px", color: "var(--cim-fg-base, #15191d)", margin: "0 0 2px" };
+              const valueStyle: React.CSSProperties = { fontSize: "0.875rem", fontWeight: 600, lineHeight: "20px", color: "var(--cim-fg-base, #15191d)", margin: "0 0 8px" };
+              const inputStyle: React.CSSProperties = { width: "100%", border: "none", borderBottom: "1px solid var(--cim-border-subtle, #eaebeb)", outline: "none", background: "transparent", resize: "none", fontSize: "0.875rem", fontFamily: "inherit", lineHeight: "20px", color: "var(--cim-fg-base, #15191d)", padding: "0 0 2px", marginBottom: "8px", minHeight: "20px", overflow: "hidden", wordBreak: "break-word" };
+              const autoGrow = (e: React.FormEvent<HTMLTextAreaElement>) => { const t = e.currentTarget; t.style.height = "auto"; t.style.height = t.scrollHeight + "px"; };
+              const mainItemValue = priceBreakdown && priceBreakdown.quantity > 0
+                ? `${priceBreakdown.quantity} * $${priceBreakdown.unitPrice.toFixed(2)} and New package price $${priceBreakdown.basePrice.toFixed(2)}`
+                : null;
+              const accessoriesValues = priceBreakdown?.accessories.map(acc => `${acc.label}: ${acc.quantity} * $${acc.unitPrice.toFixed(2)} and New package price $${(acc.quantity * acc.unitPrice).toFixed(2)}`) ?? [];
+              const chargesValues = priceBreakdown?.charges.map(c => `${c.label}: 1 * $${c.price.toFixed(2)} and New package price $${c.price.toFixed(2)}`) ?? [];
+              const itemTotalValue = priceBreakdown ? `${priceBreakdown.subtotal.toFixed(2)} USD` : null;
+              return (
+                <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
+                  <p style={labelStyle}>Reason for price query:</p>
+                  <textarea rows={1} value={templateFields.reasonForPriceQuery} onInput={autoGrow} onChange={e => setTemplateFields(p => ({ ...p, reasonForPriceQuery: e.target.value }))} style={inputStyle} />
+                  <p style={labelStyle}>Supervisor Approved:</p>
+                  <textarea rows={1} value={templateFields.supervisorApproved} onInput={autoGrow} onChange={e => setTemplateFields(p => ({ ...p, supervisorApproved: e.target.value }))} style={inputStyle} />
+                  <p style={labelStyle}>Quote ID:</p>
+                  <textarea rows={1} value={templateFields.quoteId} onInput={autoGrow} onChange={e => setTemplateFields(p => ({ ...p, quoteId: e.target.value }))} style={inputStyle} />
+                  <p style={labelStyle}>Main Item Qty &amp; Package Price:</p>
+                  {mainItemValue ? <p style={valueStyle}>{mainItemValue}</p> : <p style={{ ...valueStyle, color: "var(--cim-fg-muted, #94979b)" }}>—</p>}
+                  <p style={labelStyle}>Accessories Qty &amp; Package Price:</p>
+                  {accessoriesValues.length > 0 ? accessoriesValues.map((v, i) => <p key={i} style={valueStyle}>{v}</p>) : <p style={{ ...valueStyle, color: "var(--cim-fg-muted, #94979b)", marginBottom: "8px" }}>—</p>}
+                  <p style={labelStyle}>Fixed Charges:</p>
+                  {chargesValues.length > 0 ? chargesValues.map((v, i) => <p key={i} style={valueStyle}>{v}</p>) : <p style={{ ...valueStyle, color: "var(--cim-fg-muted, #94979b)", marginBottom: "8px" }}>—</p>}
+                  {templateFields.offerType && (
+                    <>
+                      <div style={{ height: "1px", background: "var(--cim-border-subtle, #eaebeb)", margin: "8px 0" }} />
+                      <p style={{ ...labelStyle, fontWeight: 600, marginBottom: "8px" }}>Offer Customisation:</p>
+                      <p style={labelStyle}>Offer type:</p>
+                      <textarea rows={1} value={templateFields.offerType} onInput={autoGrow} onChange={e => setTemplateFields(p => ({ ...p, offerType: e.target.value }))} style={inputStyle} />
+                      {templateFields.offerInputLabel && (
+                        <>
+                          <p style={labelStyle}>{templateFields.offerInputLabel}:</p>
+                          <textarea rows={1} value={templateFields.offerInput} onInput={autoGrow} onChange={e => setTemplateFields(p => ({ ...p, offerInput: e.target.value }))} style={inputStyle} />
+                        </>
+                      )}
+                      <p style={labelStyle}>New item price:</p>
+                      <textarea rows={1} value={templateFields.offerNewItemPrice} onInput={autoGrow} onChange={e => setTemplateFields(p => ({ ...p, offerNewItemPrice: e.target.value }))} style={inputStyle} />
+                      <p style={labelStyle}>Discount:</p>
+                      <textarea rows={1} value={templateFields.offerDiscount} onInput={autoGrow} onChange={e => setTemplateFields(p => ({ ...p, offerDiscount: e.target.value }))} style={inputStyle} />
+                      <p style={labelStyle}>Reason for customisation:</p>
+                      <textarea rows={1} value={templateFields.offerReason} onInput={autoGrow} onChange={e => setTemplateFields(p => ({ ...p, offerReason: e.target.value }))} style={inputStyle} />
+                      <div style={{ height: "1px", background: "var(--cim-border-subtle, #eaebeb)", margin: "8px 0" }} />
+                    </>
+                  )}
+                  <p style={labelStyle}>Shipping:</p>
+                  <textarea rows={1} value={templateFields.shipping} onInput={autoGrow} onChange={e => setTemplateFields(p => ({ ...p, shipping: e.target.value }))} style={inputStyle} />
+                  <p style={labelStyle}>Item Total (excluding shipping and tax):</p>
+                  {itemTotalValue ? <p style={{ ...valueStyle, marginBottom: 0 }}>{itemTotalValue}</p> : <p style={{ ...valueStyle, color: "var(--cim-fg-muted, #94979b)", marginBottom: 0 }}>—</p>}
+                </div>
+              );
+            })() : (
+              <TextArea
+                aria-label="Internal notes"
+                value={notesText}
+                onChange={setNotesText}
+                rows={12}
+              />
+            )}
           </div>
 
         </div>

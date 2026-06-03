@@ -353,6 +353,7 @@ export function SearchView({ onCustomerSelect }: SearchViewProps) {
                   <TableHeaderCell columnKey="email">Email ID</TableHeaderCell>
                   <TableHeaderCell columnKey="id">Customer ID</TableHeaderCell>
                   <TableHeaderCell columnKey="orders" columnContentAlignment="end">Orders</TableHeaderCell>
+                  <TableHeaderCell columnKey="quotes" columnContentAlignment="end">Quotes</TableHeaderCell>
                   <TableHeaderCell columnKey="actions" columnContentAlignment="end">{""}</TableHeaderCell>
                 </TableHeaderRow>
               </TableHeader>
@@ -368,6 +369,9 @@ export function SearchView({ onCustomerSelect }: SearchViewProps) {
                     </TableBodyCell>
                     <TableBodyCell columnKey="orders">
                       <div style={{ textAlign: "right" }}>{getTotalOrders(c)}</div>
+                    </TableBodyCell>
+                    <TableBodyCell columnKey="quotes">
+                      <div style={{ textAlign: "right" }}>{c.quotesCount ?? 0}</div>
                     </TableBodyCell>
                     <TableBodyCell columnKey="actions">
                       <div style={{ display: "flex", gap: "4px", alignItems: "center", justifyContent: "flex-end" }}>
