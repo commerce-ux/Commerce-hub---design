@@ -641,6 +641,22 @@ export function OrderItemsList({ items, onEdit, onRemove, onDuplicate, onQuantit
                         </Disclosure>
                       </div>
                     </div>
+
+                    {/* Design confirmation bar — shown when no artwork/imprint confirmed */}
+                    {!hasImprint && (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "12px", padding: "8px 0 4px" }}>
+                        <span style={{ fontSize: "0.75rem", color: "var(--cim-fg-warning, #a15e0c)", lineHeight: "16px" }}>
+                          Design confirmation required before quote creation
+                        </span>
+                        <Button
+                          variant="secondary"
+                          size="small"
+                          onPress={() => onEdit(item.draftItemId)}
+                        >
+                          Confirm design
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Accessories — full card layout matching Figma */}
